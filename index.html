@@ -4,22 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Eva's Fun Apps 🌟</title>
-  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;800;900&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --sky: #e0f7ff;
+      --sky: #dff4ff;
       --cloud: #ffffff;
-      --pop1: #ff6b8a;
-      --pop2: #ffb347;
-      --pop3: #6ec6f5;
-      --pop4: #a78bfa;
-      --pop5: #4ade80;
       --text-dark: #1e1b4b;
-      --text-mid: #4b5563;
-      --card-radius: 24px;
-      --shadow: 0 8px 32px rgba(80,40,120,0.13);
+      --text-mid: #5b5e8a;
+      --card-radius: 28px;
     }
 
     html { scroll-behavior: smooth; }
@@ -29,379 +24,371 @@
       font-family: 'Nunito', sans-serif;
       background: var(--sky);
       overflow-x: hidden;
-      position: relative;
     }
 
-    /* ── Animated background ── */
+    /* ── Animated background blobs ── */
     .bg-layer {
       position: fixed;
       inset: 0;
       z-index: 0;
       pointer-events: none;
       background:
-        radial-gradient(ellipse 70% 40% at 10% 20%, #c7f0ff88 0%, transparent 70%),
-        radial-gradient(ellipse 60% 50% at 90% 80%, #ffd6e888 0%, transparent 70%),
-        radial-gradient(ellipse 50% 40% at 60% 10%, #e9d5ff66 0%, transparent 70%);
+        radial-gradient(ellipse 70% 45% at 8%  18%, #c0eeff99 0%, transparent 65%),
+        radial-gradient(ellipse 55% 50% at 92% 82%, #ffd6e8aa 0%, transparent 65%),
+        radial-gradient(ellipse 50% 40% at 60% 5%,  #e9d5ff77 0%, transparent 65%),
+        radial-gradient(ellipse 40% 35% at 30% 90%, #d1fae599 0%, transparent 65%);
     }
 
-    /* Floating stars */
+    /* ── Floating particles ── */
     .stars { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
     .star {
       position: absolute;
-      border-radius: 50%;
-      animation: float linear infinite;
-      opacity: 0.55;
+      display: flex; align-items: center; justify-content: center;
+      animation: floatUp linear infinite;
+      opacity: 0.5;
     }
-    @keyframes float {
-      0%   { transform: translateY(110vh) rotate(0deg); opacity: 0; }
-      10%  { opacity: 0.55; }
-      90%  { opacity: 0.55; }
-      100% { transform: translateY(-12vh) rotate(720deg); opacity: 0; }
+    @keyframes floatUp {
+      0%   { transform: translateY(108vh) rotate(0deg);   opacity: 0; }
+      8%   { opacity: 0.5; }
+      92%  { opacity: 0.5; }
+      100% { transform: translateY(-10vh) rotate(540deg); opacity: 0; }
     }
 
-    /* ── Main layout ── */
+    /* ── Layout ── */
     .wrap {
       position: relative;
       z-index: 1;
-      max-width: 960px;
+      max-width: 1000px;
       margin: 0 auto;
-      padding: 0 20px 80px;
+      padding: 0 22px 90px;
     }
 
     /* ── Hero ── */
     .hero {
       text-align: center;
-      padding: 70px 20px 40px;
-      animation: fadeDown 0.8s ease both;
+      padding: 68px 20px 36px;
+      animation: heroIn 0.8s cubic-bezier(.22,1,.36,1) both;
     }
-    @keyframes fadeDown {
-      from { opacity: 0; transform: translateY(-30px); }
+    @keyframes heroIn {
+      from { opacity: 0; transform: translateY(-28px); }
       to   { opacity: 1; transform: translateY(0); }
     }
 
-    .hero-emoji {
-      font-size: 4rem;
+    .hero-mascot {
+      font-size: 5rem;
       display: block;
-      margin-bottom: 12px;
-      animation: bounce 2s ease-in-out infinite;
+      margin-bottom: 10px;
+      line-height: 1;
+      animation: mascotBounce 3s ease-in-out infinite;
     }
-    @keyframes bounce {
-      0%, 100% { transform: translateY(0); }
-      50%       { transform: translateY(-12px); }
+    @keyframes mascotBounce {
+      0%, 100% { transform: translateY(0) rotate(-3deg); }
+      50%       { transform: translateY(-14px) rotate(3deg); }
     }
 
     .hero h1 {
       font-family: 'Baloo 2', cursive;
-      font-weight: 800;
-      font-size: clamp(2.4rem, 7vw, 4rem);
+      font-weight: 900;
+      font-size: clamp(2.4rem, 7vw, 4.2rem);
       color: var(--text-dark);
-      line-height: 1.1;
+      line-height: 1.08;
       letter-spacing: -0.5px;
     }
-    .hero h1 span {
-      background: linear-gradient(135deg, var(--pop1), var(--pop4));
+    .hero h1 .highlight {
+      background: linear-gradient(135deg, #ff6b8a 0%, #a78bfa 60%, #38bdf8 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
     }
 
-    .hero p {
+    .hero-sub {
       margin-top: 14px;
-      font-size: 1.15rem;
+      font-size: 1.12rem;
       color: var(--text-mid);
-      font-weight: 600;
+      font-weight: 700;
+      max-width: 460px;
+      margin-left: auto;
+      margin-right: auto;
+      line-height: 1.55;
     }
 
-    /* decorative squiggle under title */
     .squiggle {
       display: block;
-      margin: 18px auto 0;
-      width: 180px;
-      height: 14px;
+      margin: 20px auto 0;
+      width: 200px;
     }
 
-    /* ── Section label ── */
-    .section-label {
+    /* ── Section heading ── */
+    .section-head {
       display: flex;
       align-items: center;
-      gap: 12px;
-      margin: 44px 0 26px;
-      animation: fadeUp 0.6s 0.3s ease both;
+      gap: 14px;
+      margin: 50px 0 30px;
+      animation: fadeUp 0.6s 0.25s ease both;
     }
     @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(20px); }
+      from { opacity: 0; transform: translateY(18px); }
       to   { opacity: 1; transform: translateY(0); }
     }
-    .section-label h2 {
+    .section-head h2 {
       font-family: 'Baloo 2', cursive;
-      font-size: 1.55rem;
-      font-weight: 800;
+      font-size: 1.6rem;
+      font-weight: 900;
       color: var(--text-dark);
       white-space: nowrap;
     }
-    .line { flex: 1; height: 3px; border-radius: 99px;
-      background: linear-gradient(90deg, var(--pop1), var(--pop3), var(--pop4)); }
+    .divider-line {
+      flex: 1; height: 3px; border-radius: 99px;
+      background: linear-gradient(90deg, #ff6b8a, #a78bfa, #38bdf8, #4ade80);
+    }
 
     /* ── Cards grid ── */
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
-      gap: 24px;
+      grid-template-columns: repeat(auto-fill, minmax(285px, 1fr));
+      gap: 26px;
     }
 
     /* ── Card ── */
     .card {
-      background: var(--cloud);
+      background: #fff;
       border-radius: var(--card-radius);
-      box-shadow: var(--shadow);
-      overflow: hidden;
-      text-decoration: none;
+      box-shadow: 0 6px 28px rgba(80,40,140,0.11), 0 1px 4px rgba(80,40,140,0.07);
       display: flex;
       flex-direction: column;
+      overflow: hidden;
+      text-decoration: none;
       position: relative;
-      transition: transform 0.25s cubic-bezier(.34,1.56,.64,1), box-shadow 0.25s ease;
-      animation: cardIn 0.5s ease both;
+      transition: transform 0.28s cubic-bezier(.34,1.56,.64,1), box-shadow 0.28s ease;
+      animation: cardIn 0.55s ease both;
     }
     .card:hover {
-      transform: translateY(-8px) scale(1.02);
-      box-shadow: 0 20px 50px rgba(80,40,120,0.2);
+      transform: translateY(-10px) scale(1.02);
+      box-shadow: 0 22px 54px rgba(80,40,140,0.19), 0 2px 8px rgba(80,40,140,0.1);
     }
-    .card:active { transform: scale(0.97); }
+    .card:active { transform: scale(0.97) translateY(-4px); }
 
     @keyframes cardIn {
-      from { opacity: 0; transform: translateY(30px) scale(0.95); }
+      from { opacity: 0; transform: translateY(34px) scale(0.94); }
       to   { opacity: 1; transform: translateY(0) scale(1); }
     }
-    .card:nth-child(1) { animation-delay: 0.1s; }
-    .card:nth-child(2) { animation-delay: 0.2s; }
-    .card:nth-child(3) { animation-delay: 0.3s; }
-    .card:nth-child(4) { animation-delay: 0.4s; }
-    .card:nth-child(5) { animation-delay: 0.5s; }
+    .card:nth-child(1) { animation-delay: 0.08s; }
+    .card:nth-child(2) { animation-delay: 0.18s; }
+    .card:nth-child(3) { animation-delay: 0.28s; }
+    .card:nth-child(4) { animation-delay: 0.38s; }
+    .card:nth-child(5) { animation-delay: 0.48s; }
 
-    .card-top {
-      height: 120px;
+    .card-band {
+      height: 10px;
+      width: 100%;
+      flex-shrink: 0;
+    }
+    .card:nth-child(1) .card-band { background: linear-gradient(90deg,#ff6b8a,#ff9aae); }
+    .card:nth-child(2) .card-band { background: linear-gradient(90deg,#f59e0b,#fde68a); }
+    .card:nth-child(3) .card-band { background: linear-gradient(90deg,#38bdf8,#93c5fd); }
+    .card:nth-child(4) .card-band { background: linear-gradient(90deg,#a78bfa,#d8b4fe); }
+    .card:nth-child(5) .card-band { background: linear-gradient(90deg,#22c55e,#86efac); }
+
+    .card-icon-wrap {
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 3.2rem;
-      position: relative;
-      overflow: hidden;
+      padding: 28px 20px 12px;
     }
-    /* each card gets its own color */
-    .card:nth-child(1) .card-top { background: linear-gradient(135deg, #ffdde1, #ff9aae); }
-    .card:nth-child(2) .card-top { background: linear-gradient(135deg, #fff0cc, #ffcc70); }
-    .card:nth-child(3) .card-top { background: linear-gradient(135deg, #ccf0ff, #6ec6f5); }
-    .card:nth-child(4) .card-top { background: linear-gradient(135deg, #e8d5ff, #c084fc); }
-    .card:nth-child(5) .card-top { background: linear-gradient(135deg, #d1fae5, #4ade80); }
-
-    /* animated emoji on hover */
-    .card-emoji {
-      display: inline-block;
-      transition: transform 0.3s cubic-bezier(.34,1.56,.64,1);
+    .card-icon-wrap iconify-icon {
+      display: block;
+      filter: drop-shadow(0 6px 14px rgba(0,0,0,0.13));
+      transition: transform 0.32s cubic-bezier(.34,1.56,.64,1);
     }
-    .card:hover .card-emoji { transform: scale(1.25) rotate(-8deg); }
-
-    /* sparkle badge */
-    .badge {
-      position: absolute;
-      top: 10px; right: 12px;
-      font-size: 0.7rem;
-      font-weight: 700;
-      padding: 3px 10px;
-      border-radius: 99px;
-      background: rgba(255,255,255,0.85);
-      color: var(--text-dark);
-      letter-spacing: 0.04em;
-      backdrop-filter: blur(4px);
+    .card:hover .card-icon-wrap iconify-icon {
+      transform: scale(1.18) rotate(-6deg);
     }
 
     .card-body {
-      padding: 18px 20px 22px;
+      padding: 0 22px 26px;
       flex: 1;
       display: flex;
       flex-direction: column;
-      gap: 6px;
-    }
-    .card-title {
-      font-family: 'Baloo 2', cursive;
-      font-weight: 800;
-      font-size: 1.15rem;
-      color: var(--text-dark);
-      line-height: 1.2;
-    }
-    .card-url {
-      font-size: 0.78rem;
-      color: #9ca3af;
-      word-break: break-all;
-      margin-top: auto;
-      padding-top: 10px;
     }
 
+    .card-title {
+      font-family: 'Baloo 2', cursive;
+      font-weight: 900;
+      font-size: 1.25rem;
+      color: var(--text-dark);
+      line-height: 1.2;
+      margin-bottom: 8px;
+    }
+
+    .card-desc {
+      font-size: 0.92rem;
+      color: #6b7280;
+      font-weight: 600;
+      line-height: 1.6;
+      flex: 1;
+    }
+
+    /* ── Play button ── */
     .play-btn {
-      display: inline-flex;
+      display: flex;
       align-items: center;
-      gap: 7px;
-      margin-top: 14px;
-      padding: 9px 20px;
+      justify-content: center;
+      gap: 9px;
+      margin-top: 20px;
+      padding: 13px 20px;
       border-radius: 99px;
       font-family: 'Baloo 2', cursive;
-      font-weight: 700;
-      font-size: 0.95rem;
+      font-weight: 800;
+      font-size: 1.05rem;
       color: #fff;
-      border: none;
-      cursor: pointer;
       text-decoration: none;
-      transition: filter 0.2s;
-      align-self: flex-start;
+      letter-spacing: 0.02em;
+      transition: filter 0.2s ease, transform 0.15s ease;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.15);
     }
-    .play-btn:hover { filter: brightness(1.1); }
-    .card:nth-child(1) .play-btn { background: linear-gradient(135deg, #ff6b8a, #ff9aae); }
-    .card:nth-child(2) .play-btn { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
-    .card:nth-child(3) .play-btn { background: linear-gradient(135deg, #38bdf8, #6ec6f5); }
-    .card:nth-child(4) .play-btn { background: linear-gradient(135deg, #a78bfa, #c084fc); }
-    .card:nth-child(5) .play-btn { background: linear-gradient(135deg, #22c55e, #4ade80); }
+    .play-btn:hover  { filter: brightness(1.08); transform: scale(1.04); }
+    .play-btn:active { transform: scale(0.96); }
+
+    .card:nth-child(1) .play-btn { background: linear-gradient(135deg, #ff6b8a 0%, #f43f7a 100%); }
+    .card:nth-child(2) .play-btn { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+    .card:nth-child(3) .play-btn { background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%); }
+    .card:nth-child(4) .play-btn { background: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%); }
+    .card:nth-child(5) .play-btn { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); }
 
     /* ── Footer ── */
     footer {
       text-align: center;
-      padding: 40px 20px 20px;
+      padding: 48px 20px 28px;
       color: #9ca3af;
-      font-size: 0.88rem;
-      animation: fadeUp 0.6s 0.8s ease both;
+      font-size: 0.92rem;
+      font-weight: 700;
+      animation: fadeUp 0.6s 0.7s ease both;
     }
-    footer strong { color: var(--pop1); }
+    footer .heart { color: #ff6b8a; }
 
-    /* ── Responsive ── */
     @media (max-width: 480px) {
       .grid { grid-template-columns: 1fr; }
-      .hero { padding: 50px 10px 30px; }
+      .hero { padding: 48px 10px 28px; }
     }
   </style>
 </head>
 <body>
 
-  <div class="bg-layer"></div>
+<div class="bg-layer"></div>
+<div class="stars" id="stars"></div>
 
-  <!-- floating stars -->
-  <div class="stars" id="stars"></div>
+<div class="wrap">
 
-  <div class="wrap">
+  <header class="hero">
+    <span class="hero-mascot">🌟</span>
+    <h1>Hello, I am <span class="highlight">Eva!</span></h1>
+    <p class="hero-sub">These are my collection of apps I made with my Dad! ✨</p>
+    <svg class="squiggle" viewBox="0 0 200 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M2 8 Q25 1 48 8 Q71 15 94 8 Q117 1 140 8 Q163 15 186 8 Q192 5 198 8"
+        stroke="url(#sq)" stroke-width="4" stroke-linecap="round" fill="none"/>
+      <defs>
+        <linearGradient id="sq" x1="0" y1="0" x2="200" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0%"   stop-color="#ff6b8a"/>
+          <stop offset="40%"  stop-color="#a78bfa"/>
+          <stop offset="75%"  stop-color="#38bdf8"/>
+          <stop offset="100%" stop-color="#4ade80"/>
+        </linearGradient>
+      </defs>
+    </svg>
+  </header>
 
-    <!-- Hero -->
-    <header class="hero">
-      <span class="hero-emoji">🌟</span>
-      <h1>Hello, <span>Eva!</span></h1>
-      <p>Your very own little corner of the internet ✨</p>
-      <svg class="squiggle" viewBox="0 0 180 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M2 7 Q22 1 42 7 Q62 13 82 7 Q102 1 122 7 Q142 13 162 7 Q170 4 178 7"
-          stroke="url(#sq)" stroke-width="3.5" stroke-linecap="round" fill="none"/>
-        <defs>
-          <linearGradient id="sq" x1="0" y1="0" x2="180" y2="0" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stop-color="#ff6b8a"/>
-            <stop offset="50%" stop-color="#6ec6f5"/>
-            <stop offset="100%" stop-color="#a78bfa"/>
-          </linearGradient>
-        </defs>
-      </svg>
-    </header>
+  <div class="section-head">
+    <h2>🎮 Eva's Fun Apps</h2>
+    <div class="divider-line"></div>
+  </div>
 
-    <!-- Section -->
-    <div class="section-label">
-      <h2>🎮 Eva's Fun Apps</h2>
-      <div class="line"></div>
+  <div class="grid">
+
+    <div class="card">
+      <div class="card-band"></div>
+      <div class="card-icon-wrap">
+        <iconify-icon icon="fluent-emoji:clapper-board" width="90" height="90"></iconify-icon>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Super Duper Videos</div>
+        <div class="card-desc">Watch and enjoy a collection of super fun, silly, and amazing videos handpicked just for you! 🎬</div>
+        <a class="play-btn" href="https://super-duper-videos.vercel.app/" target="_blank" rel="noopener">▶ &nbsp;Open App</a>
+      </div>
     </div>
 
-    <!-- Cards -->
-    <div class="grid">
+    <div class="card">
+      <div class="card-band"></div>
+      <div class="card-icon-wrap">
+        <iconify-icon icon="fluent-emoji:pot-of-food" width="90" height="90"></iconify-icon>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Cooking Game</div>
+        <div class="card-desc">Become a chef! Mix ingredients, follow recipes, and cook up the most yummy dishes in your kitchen! 🍳</div>
+        <a class="play-btn" href="https://cooking-game-lyart.vercel.app/" target="_blank" rel="noopener">▶ &nbsp;Open App</a>
+      </div>
+    </div>
 
-      <a class="card" href="https://super-duper-videos.vercel.app/" target="_blank" rel="noopener">
-        <div class="card-top">
-          <span class="card-emoji">🎬</span>
-          <span class="badge">⭐ New</span>
-        </div>
-        <div class="card-body">
-          <div class="card-title">Super Duper Videos</div>
-          <div class="card-url">super-duper-videos.vercel.app</div>
-          <a class="play-btn" href="https://super-duper-videos.vercel.app/" target="_blank" rel="noopener">▶ Open</a>
-        </div>
-      </a>
+    <div class="card">
+      <div class="card-band"></div>
+      <div class="card-icon-wrap">
+        <iconify-icon icon="fluent-emoji:microscope" width="90" height="90"></iconify-icon>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Wonder Lab</div>
+        <div class="card-desc">Put on your lab coat and step inside! Discover cool science experiments and mind-blowing discoveries! 🔬</div>
+        <a class="play-btn" href="https://rd4704.github.io/wonder-lab/" target="_blank" rel="noopener">▶ &nbsp;Open App</a>
+      </div>
+    </div>
 
-      <a class="card" href="https://cooking-game-lyart.vercel.app/" target="_blank" rel="noopener">
-        <div class="card-top">
-          <span class="card-emoji">🍳</span>
-        </div>
-        <div class="card-body">
-          <div class="card-title">Cooking Game</div>
-          <div class="card-url">cooking-game-lyart.vercel.app</div>
-          <a class="play-btn" href="https://cooking-game-lyart.vercel.app/" target="_blank" rel="noopener">▶ Open</a>
-        </div>
-      </a>
+    <div class="card">
+      <div class="card-band"></div>
+      <div class="card-icon-wrap">
+        <iconify-icon icon="fluent-emoji:teddy-bear" width="90" height="90"></iconify-icon>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Super Toy Maker</div>
+        <div class="card-desc">Design, build, and bring your very own toys to life in this magical toy factory! What will you create? 🧸</div>
+        <a class="play-btn" href="https://the-super-toy-maker.vercel.app" target="_blank" rel="noopener">▶ &nbsp;Open App</a>
+      </div>
+    </div>
 
-      <a class="card" href="https://rd4704.github.io/wonder-lab/" target="_blank" rel="noopener">
-        <div class="card-top">
-          <span class="card-emoji">🔬</span>
-        </div>
-        <div class="card-body">
-          <div class="card-title">Wonder Lab</div>
-          <div class="card-url">rd4704.github.io/wonder-lab</div>
-          <a class="play-btn" href="https://rd4704.github.io/wonder-lab/" target="_blank" rel="noopener">▶ Open</a>
-        </div>
-      </a>
+    <div class="card">
+      <div class="card-band"></div>
+      <div class="card-icon-wrap">
+        <iconify-icon icon="fluent-emoji:alien-monster" width="90" height="90"></iconify-icon>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Slime Game</div>
+        <div class="card-desc">Squish, stretch, swirl, and mix colourful gooey slimes to your heart's content — it's so satisfying! 🟢</div>
+        <a class="play-btn" href="https://slime-game-gilt.vercel.app" target="_blank" rel="noopener">▶ &nbsp;Open App</a>
+      </div>
+    </div>
 
-      <a class="card" href="https://the-super-toy-maker.vercel.app" target="_blank" rel="noopener">
-        <div class="card-top">
-          <span class="card-emoji">🧸</span>
-        </div>
-        <div class="card-body">
-          <div class="card-title">Super Toy Maker</div>
-          <div class="card-url">the-super-toy-maker.vercel.app</div>
-          <a class="play-btn" href="https://the-super-toy-maker.vercel.app" target="_blank" rel="noopener">▶ Open</a>
-        </div>
-      </a>
+  </div>
+</div>
 
-      <a class="card" href="https://slime-game-gilt.vercel.app" target="_blank" rel="noopener">
-        <div class="card-top">
-          <span class="card-emoji">🟢</span>
-        </div>
-        <div class="card-body">
-          <div class="card-title">Slime Game</div>
-          <div class="card-url">slime-game-gilt.vercel.app</div>
-          <a class="play-btn" href="https://slime-game-gilt.vercel.app" target="_blank" rel="noopener">▶ Open</a>
-        </div>
-      </a>
+<footer>
+  Made with <span class="heart">💖</span> just for Eva &amp; her friends
+</footer>
 
-    </div><!-- /grid -->
-
-  </div><!-- /wrap -->
-
-  <footer>
-    Made with 💖 just for <strong>Eva</strong>
-  </footer>
-
-  <script>
-    // Generate floating star particles
-    const colors = ['#ff6b8a','#ffb347','#6ec6f5','#a78bfa','#4ade80','#ffd700'];
-    const shapes = ['★','●','♦','✦','•'];
-    const container = document.getElementById('stars');
-    for (let i = 0; i < 28; i++) {
-      const el = document.createElement('div');
-      el.className = 'star';
-      const size = 10 + Math.random() * 18;
-      el.style.cssText = `
-        left: ${Math.random()*100}%;
-        width: ${size}px; height: ${size}px;
-        font-size: ${size}px;
-        color: ${colors[Math.floor(Math.random()*colors.length)]};
-        animation-duration: ${8 + Math.random()*14}s;
-        animation-delay: ${Math.random()*12}s;
-        background: transparent;
-        display:flex;align-items:center;justify-content:center;
-      `;
-      el.textContent = shapes[Math.floor(Math.random()*shapes.length)];
-      el.style.background = 'none';
-      el.style.borderRadius = '0';
-      container.appendChild(el);
-    }
-  </script>
+<script>
+  const chars  = ['★','✦','•','♦','✿','❋','◆'];
+  const colors = ['#ff6b8a','#ffb347','#6ec6f5','#a78bfa','#4ade80','#ffd700','#f9a8d4'];
+  const wrap   = document.getElementById('stars');
+  for (let i = 0; i < 30; i++) {
+    const el = document.createElement('div');
+    el.className = 'star';
+    const size = 10 + Math.random() * 20;
+    el.textContent = chars[Math.floor(Math.random() * chars.length)];
+    Object.assign(el.style, {
+      left:              `${Math.random() * 100}%`,
+      fontSize:          `${size}px`,
+      color:             colors[Math.floor(Math.random() * colors.length)],
+      animationDuration: `${9 + Math.random() * 16}s`,
+      animationDelay:    `${Math.random() * 14}s`,
+    });
+    wrap.appendChild(el);
+  }
+</script>
 </body>
 </html>

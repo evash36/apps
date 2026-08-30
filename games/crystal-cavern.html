@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Crystal Cavern</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --bg1:#0b0f2a;
+    --bg2:#1a0f3d;
+    --panel:#150f30cc;
+    --accent:#7ef9ff;
+    --gold:#ffd166;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;
+    height:100%;
+    background:radial-gradient(ellipse at 50% 0%, #2a1a5e 0%, var(--bg2) 40%, var(--bg1) 100%);
+    font-family:'Segoe UI', Tahoma, Verdana, sans-serif;
+    color:#f0eefc;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+  }
+  #wrap{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:14px;
+    padding:20px;
+  }
+  h1{
+    margin:0;
+    font-size:28px;
+    letter-spacing:2px;
+    background:linear-gradient(90deg,#7ef9ff,#c07eff,#ffd166);
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+    text-shadow:0 0 30px rgba(126,249,255,0.25);
+  }
+  #hud{
+    display:flex;
+    gap:24px;
+    background:var(--panel);
+    border:1px solid #4a3f8a;
+    border-radius:12px;
+    padding:10px 22px;
+    font-size:15px;
+    box-shadow:0 0 20px rgba(90,60,200,0.35);
+    min-width:340px;
+    justify-content:space-between;
+  }
+  #hud .stat{display:flex;flex-direction:column;align-items:center;min-width:70px;}
+  #hud .label{font-size:11px;opacity:.6;letter-spacing:1px;text-transform:uppercase;}
+  #hud .value{font-size:20px;font-weight:700;color:var(--accent);}
+  #hud .value.gold{color:var(--gold);}
+  #hud .value.timer-warn{color:#ff6b6b;}
+
+  #board{
+    position:relative;
+    display:grid;
+    grid-template-columns:repeat(8, 46px);
+    grid-template-rows:repeat(8, 46px);
+    gap:4px;
+    padding:10px;
+    background:linear-gradient(145deg,#1c1440,#100c28);
+    border-radius:16px;
+    border:1px solid #4a3f8a;
+    box-shadow:inset 0 0 40px rgba(0,0,0,0.6), 0 0 30px rgba(90,60,200,0.3);
+  }
+  .cell{
+    width:46px;
+    height:46px;
+    border-radius:10px;
+    background:rgba(255,255,255,0.03);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+  }
+  .gem{
+    width:38px;
+    height:38px;
+    border-radius:9px;
+    cursor:pointer;
+    transition:transform 120ms ease, opacity 150ms ease, top 220ms cubic-bezier(.4,1.4,.6,1);
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .gem::after{
+    content:"";
+    position:absolute;
+    inset:4px;
+    border-radius:6px;
+    background:linear-gradient(135deg, rgba(255,255,255,0.55), rgba(255,255,255,0) 60%);
+    pointer-events:none;
+  }
+  .gem:hover{transform:scale(1.08);}
+  .gem.selected{
+    transform:scale(1.15);
+    box-shadow:0 0 0 3px #fff, 0 0 18px 4px #fff;
+  }
+  .gem.matched{
+    animation:pop 260ms ease forwards;
+  }
+  .gem.shake{
+    animation:shake 300ms ease;
+  }
+  .gem.dropping{
+    animation:none;
+  }
+  @keyframes pop{
+    0%{transform:scale(1);opacity:1;}
+    60%{transform:scale(1.35);opacity:.7;}
+    100%{transform:scale(0);opacity:0;}
+  }
+  @keyframes shake{
+    0%,100%{transform:translateX(0);}
+    25%{transform:translateX(-6px);}
+    75%{transform:translateX(6px);}
+  }
+  .t0{background:radial-gradient(circle at 30% 30%, #9df9ff, #14c7d6); box-shadow:0 0 10px #14c7d6aa;} /* cyan */
+  .t1{background:radial-gradient(circle at 30% 30%, #ff9de3, #d61494); box-shadow:0 0 10px #d61494aa;} /* magenta */
+  .t2{background:radial-gradient(circle at 30% 30%, #fff2a8, #d69e14); box-shadow:0 0 10px #d69e14aa;} /* gold */
+  .t3{background:radial-gradient(circle at 30% 30%, #b7ffb0, #2fb84d); box-shadow:0 0 10px #2fb84daa;} /* emerald */
+  .t4{background:radial-gradient(circle at 30% 30%, #ffb0b0, #d62f2f); box-shadow:0 0 10px #d62f2faa;} /* ruby */
+  .t5{background:radial-gradient(circle at 30% 30%, #d0b0ff, #7a2fd6); box-shadow:0 0 10px #7a2fd6aa;} /* amethyst */
+
+  #combo{
+    position:absolute;
+    top:-28px;
+    left:50%;
+    transform:translateX(-50%);
+    font-size:14px;
+    color:var(--gold);
+    opacity:0;
+    pointer-events:none;
+    font-weight:700;
+    text-shadow:0 0 8px rgba(255,209,102,0.8);
+  }
+  #combo.show{animation:comboPop 700ms ease forwards;}
+  @keyframes comboPop{
+    0%{opacity:0; transform:translateX(-50%) translateY(6px) scale(0.8);}
+    20%{opacity:1; transform:translateX(-50%) translateY(-4px) scale(1.1);}
+    80%{opacity:1;}
+    100%{opacity:0; transform:translateX(-50%) translateY(-14px) scale(1);}
+  }
+
+  #overlay{
+    position:absolute;
+    inset:0;
+    background:rgba(8,6,24,0.88);
+    border-radius:16px;
+    display:none;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:12px;
+    text-align:center;
+    z-index:5;
+  }
+  #overlay.show{display:flex;}
+  #overlay h2{margin:0;font-size:26px;color:var(--gold);}
+  #overlay p{margin:2px 0;font-size:15px;opacity:.85;}
+  #boardOuter{position:relative;}
+  button{
+    background:linear-gradient(135deg,#7ef9ff,#c07eff);
+    border:none;
+    border-radius:10px;
+    padding:10px 22px;
+    font-size:15px;
+    font-weight:700;
+    color:#160b33;
+    cursor:pointer;
+    margin-top:6px;
+    box-shadow:0 4px 14px rgba(126,249,255,0.35);
+  }
+  button:active{transform:translateY(1px);}
+  #startHint{font-size:12px;opacity:.55;margin-top:2px;}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>✦ Crystal Cavern ✦</h1>
+  <div id="hud">
+    <div class="stat"><span class="label">Score</span><span class="value" id="scoreVal">0</span></div>
+    <div class="stat"><span class="label">Best</span><span class="value gold" id="bestVal">0</span></div>
+    <div class="stat"><span class="label">Time</span><span class="value" id="timeVal">90</span></div>
+  </div>
+  <div id="boardOuter">
+    <div id="board"></div>
+    <div id="combo"></div>
+    <div id="overlay">
+      <h2 id="overlayTitle">Time's Up!</h2>
+      <p id="overlayScore">Score: 0</p>
+      <p id="overlayBest">Best: 0</p>
+      <button id="restartBtn">Play Again</button>
+    </div>
+  </div>
+  <div id="startHint">Click a gem, then click a neighbor to swap. Match 3+ in a row or column.</div>
+</div>
+
+<script>
+(function(){
+  const SIZE = 8;
+  const TYPES = 6;
+  const TIME_LIMIT = 90;
+
+  const boardEl = document.getElementById('board');
+  const scoreEl = document.getElementById('scoreVal');
+  const bestEl = document.getElementById('bestVal');
+  const timeEl = document.getElementById('timeVal');
+  const comboEl = document.getElementById('combo');
+  const overlayEl = document.getElementById('overlay');
+  const overlayTitle = document.getElementById('overlayTitle');
+  const overlayScore = document.getElementById('overlayScore');
+  const overlayBest = document.getElementById('overlayBest');
+  const restartBtn = document.getElementById('restartBtn');
+
+  let grid = [];        // grid[row][col] = type (0..5)
+  let cells = [];        // DOM refs grid[row][col] = {cellEl, gemEl}
+  let score = 0;
+  let best = Number(localStorage.getItem('crystalCavernBest') || 0);
+  let timeLeft = TIME_LIMIT;
+  let timerId = null;
+  let selected = null;   // {r,c}
+  let busy = false;      // lock input during animations
+  let gameOver = false;
+
+  bestEl.textContent = best;
+
+  function randType(){ return Math.floor(Math.random()*TYPES); }
+
+  function buildEmptyGrid(){
+    grid = [];
+    for(let r=0;r<SIZE;r++){
+      grid.push(new Array(SIZE).fill(-1));
+    }
+  }
+
+  function wouldMatch(r,c,t){
+    // check horizontal
+    if(c>=2 && grid[r][c-1]===t && grid[r][c-2]===t) return true;
+    // check vertical
+    if(r>=2 && grid[r-1][c]===t && grid[r-2][c]===t) return true;
+    return false;
+  }
+
+  function fillInitialGrid(){
+    buildEmptyGrid();
+    for(let r=0;r<SIZE;r++){
+      for(let c=0;c<SIZE;c++){
+        let t;
+        let attempts=0;
+        do{
+          t = randType();
+          attempts++;
+        } while(wouldMatch(r,c,t) && attempts<50);
+        grid[r][c] = t;
+      }
+    }
+  }
+
+  function renderBoard(){
+    boardEl.innerHTML = '';
+    cells = [];
+    for(let r=0;r<SIZE;r++){
+      const rowArr = [];
+      for(let c=0;c<SIZE;c++){
+        const cellEl = document.createElement('div');
+        cellEl.className = 'cell';
+        const gemEl = document.createElement('div');
+        gemEl.className = 'gem t'+grid[r][c];
+        gemEl.dataset.r = r;
+        gemEl.dataset.c = c;
+        gemEl.addEventListener('click', onGemClick);
+        cellEl.appendChild(gemEl);
+        boardEl.appendChild(cellEl);
+        rowArr.push({cellEl, gemEl});
+      }
+      cells.push(rowArr);
+    }
+  }
+
+  function updateGemVisual(r,c){
+    const {gemEl} = cells[r][c];
+    gemEl.className = 'gem t'+grid[r][c];
+    gemEl.dataset.r = r;
+    gemEl.dataset.c = c;
+  }
+
+  function onGemClick(e){
+    if(busy || gameOver) return;
+    const r = Number(e.currentTarget.dataset.r);
+    const c = Number(e.currentTarget.dataset.c);
+
+    if(!selected){
+      selected = {r,c};
+      cells[r][c].gemEl.classList.add('selected');
+      return;
+    }
+
+    if(selected.r===r && selected.c===c){
+      cells[r][c].gemEl.classList.remove('selected');
+      selected = null;
+      return;
+    }
+
+    const dr = Math.abs(selected.r - r);
+    const dc = Math.abs(selected.c - c);
+    const adjacent = (dr+dc===1);
+
+    cells[selected.r][selected.c].gemEl.classList.remove('selected');
+
+    if(!adjacent){
+      selected = {r,c};
+      cells[r][c].gemEl.classList.add('selected');
+      return;
+    }
+
+    attemptSwap(selected.r, selected.c, r, c);
+    selected = null;
+  }
+
+  function swapGrid(r1,c1,r2,c2){
+    const tmp = grid[r1][c1];
+    grid[r1][c1] = grid[r2][c2];
+    grid[r2][c2] = tmp;
+  }
+
+  function attemptSwap(r1,c1,r2,c2){
+    busy = true;
+    swapGrid(r1,c1,r2,c2);
+    const matches = findMatches();
+
+    if(matches.size === 0){
+      // revert with a little shake feedback
+      swapGrid(r1,c1,r2,c2);
+      updateGemVisual(r1,c1);
+      updateGemVisual(r2,c2);
+      cells[r1][c1].gemEl.classList.add('shake');
+      cells[r2][c2].gemEl.classList.add('shake');
+      setTimeout(()=>{
+        cells[r1][c1].gemEl.classList.remove('shake');
+        cells[r2][c2].gemEl.classList.remove('shake');
+        busy = false;
+      }, 300);
+      return;
+    }
+
+    updateGemVisual(r1,c1);
+    updateGemVisual(r2,c2);
+    resolveCascade(1);
+  }
+
+  function findMatches(){
+    const matched = new Set();
+    // horizontal
+    for(let r=0;r<SIZE;r++){
+      let runStart=0;
+      for(let c=1;c<=SIZE;c++){
+        const same = c<SIZE && grid[r][c]===grid[r][runStart] && grid[r][c]!==-1;
+        if(!same){
+          if(c-runStart>=3){
+            for(let k=runStart;k<c;k++) matched.add(r+'_'+k);
+          }
+          runStart = c;
+        }
+      }
+    }
+    // vertical
+    for(let c=0;c<SIZE;c++){
+      let runStart=0;
+      for(let r=1;r<=SIZE;r++){
+        const same = r<SIZE && grid[r][c]===grid[runStart][c] && grid[r][c]!==-1;
+        if(!same){
+          if(r-runStart>=3){
+            for(let k=runStart;k<r;k++) matched.add(k+'_'+c);
+          }
+          runStart = r;
+        }
+      }
+    }
+    return matched;
+  }
+
+  function resolveCascade(comboMult){
+    const matches = findMatches();
+    if(matches.size===0){
+      busy = false;
+      checkDeadlock();
+      return;
+    }
+
+    // score
+    const gained = matches.size * 10 * comboMult;
+    score += gained;
+    scoreEl.textContent = score;
+    if(score>best){
+      best = score;
+      bestEl.textContent = best;
+      localStorage.setItem('crystalCavernBest', best);
+    }
+
+    if(comboMult>1){
+      showCombo(comboMult, gained);
+    }
+
+    // animate matched gems out
+    matches.forEach(key=>{
+      const [r,c] = key.split('_').map(Number);
+      cells[r][c].gemEl.classList.add('matched');
+    });
+
+    setTimeout(()=>{
+      // clear matched cells in grid
+      matches.forEach(key=>{
+        const [r,c] = key.split('_').map(Number);
+        grid[r][c] = -1;
+      });
+      applyGravity();
+      render_afterGravity();
+      setTimeout(()=>{
+        resolveCascade(comboMult+1);
+      }, 220);
+    }, 240);
+  }
+
+  function applyGravity(){
+    for(let c=0;c<SIZE;c++){
+      let writeRow = SIZE-1;
+      for(let r=SIZE-1;r>=0;r--){
+        if(grid[r][c] !== -1){
+          grid[writeRow][c] = grid[r][c];
+          if(writeRow!==r) grid[r][c] = -1;
+          writeRow--;
+        }
+      }
+      for(let r=writeRow;r>=0;r--){
+        grid[r][c] = randType();
+      }
+    }
+  }
+
+  function render_afterGravity(){
+    for(let r=0;r<SIZE;r++){
+      for(let c=0;c<SIZE;c++){
+        updateGemVisual(r,c);
+      }
+    }
+  }
+
+  function showCombo(mult, gained){
+    comboEl.textContent = 'Combo x'+mult+'  +'+gained;
+    comboEl.classList.remove('show');
+    void comboEl.offsetWidth;
+    comboEl.classList.add('show');
+  }
+
+  function checkDeadlock(){
+    // brute force: check if any adjacent swap produces a match
+    for(let r=0;r<SIZE;r++){
+      for(let c=0;c<SIZE;c++){
+        if(c+1<SIZE){
+          swapGrid(r,c,r,c+1);
+          const m = findMatches();
+          swapGrid(r,c,r,c+1);
+          if(m.size>0) return;
+        }
+        if(r+1<SIZE){
+          swapGrid(r,c,r+1,c);
+          const m = findMatches();
+          swapGrid(r,c,r+1,c);
+          if(m.size>0) return;
+        }
+      }
+    }
+    // no moves left -> reshuffle
+    fillInitialGrid();
+    render_afterGravity();
+  }
+
+  function tick(){
+    if(gameOver) return;
+    timeLeft--;
+    timeEl.textContent = timeLeft;
+    if(timeLeft<=10){
+      timeEl.classList.add('timer-warn');
+    }
+    if(timeLeft<=0){
+      endGame();
+    }
+  }
+
+  function endGame(){
+    gameOver = true;
+    clearInterval(timerId);
+    overlayTitle.textContent = "Time's Up!";
+    overlayScore.textContent = 'Score: '+score;
+    overlayBest.textContent = 'Best: '+best;
+    overlayEl.classList.add('show');
+  }
+
+  function startGame(){
+    score = 0;
+    timeLeft = TIME_LIMIT;
+    gameOver = false;
+    busy = false;
+    selected = null;
+    scoreEl.textContent = 0;
+    timeEl.textContent = TIME_LIMIT;
+    timeEl.classList.remove('timer-warn');
+    bestEl.textContent = best;
+    overlayEl.classList.remove('show');
+    fillInitialGrid();
+    renderBoard();
+    if(timerId) clearInterval(timerId);
+    timerId = setInterval(tick, 1000);
+  }
+
+  restartBtn.addEventListener('click', startGame);
+
+  startGame();
+})();
+</script>
+</body>
+</html>

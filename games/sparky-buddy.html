@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sparky the Learning Buddy</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --pink:#ff6fa5;
+    --purple:#8c6bff;
+    --blue:#4fc3f7;
+    --yellow:#ffd166;
+    --green:#4ade80;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;
+    height:100%;
+    font-family:'Comic Sans MS', 'Baloo 2', 'Trebuchet MS', sans-serif;
+    background:linear-gradient(160deg,#fff1f8 0%, #eaf6ff 45%, #f2ecff 100%);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  #app{
+    width:480px;
+    max-width:95vw;
+    height:680px;
+    max-height:95vh;
+    background:#ffffff;
+    border-radius:26px;
+    box-shadow:0 20px 50px rgba(140,107,255,0.25);
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    border:4px solid #fff;
+  }
+  #header{
+    background:linear-gradient(120deg, var(--purple), var(--pink));
+    padding:16px 18px;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    color:white;
+  }
+  #avatar{
+    width:52px;
+    height:52px;
+    border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #fff, var(--yellow) 60%, #ffb347 100%);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:28px;
+    box-shadow:0 0 0 4px rgba(255,255,255,0.35);
+    animation:bob 2.4s ease-in-out infinite;
+  }
+  @keyframes bob{
+    0%,100%{transform:translateY(0) rotate(-3deg);}
+    50%{transform:translateY(-4px) rotate(3deg);}
+  }
+  #headerText{flex:1;}
+  #headerText h1{margin:0;font-size:19px;}
+  #headerText p{margin:2px 0 0;font-size:12px;opacity:.9;}
+  #voiceToggle{
+    width:42px;
+    height:42px;
+    border-radius:50%;
+    border:2px solid rgba(255,255,255,0.7);
+    background:rgba(255,255,255,0.15);
+    color:white;
+    font-size:19px;
+    cursor:pointer;
+    flex-shrink:0;
+    transition:background 120ms ease, transform 120ms ease;
+  }
+  #voiceToggle:hover{transform:scale(1.06);}
+  #voiceToggle.off{background:rgba(0,0,0,0.15); opacity:.7;}
+
+  #chat{
+    flex:1;
+    overflow-y:auto;
+    padding:16px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    background:
+      radial-gradient(circle at 90% 10%, rgba(255,209,102,0.15), transparent 40%),
+      radial-gradient(circle at 10% 90%, rgba(79,195,247,0.15), transparent 40%);
+  }
+  .msg{
+    max-width:78%;
+    padding:10px 14px;
+    border-radius:18px;
+    font-size:15px;
+    line-height:1.4;
+    animation:pop-in 180ms ease;
+    display:flex;
+    align-items:flex-end;
+    gap:6px;
+  }
+  .speakBtn{
+    flex-shrink:0;
+    width:24px;
+    height:24px;
+    border-radius:50%;
+    border:none;
+    background:rgba(140,107,255,0.15);
+    color:var(--purple);
+    font-size:12px;
+    cursor:pointer;
+    line-height:1;
+  }
+  .speakBtn:hover{background:rgba(140,107,255,0.3);}
+  .speakBtn.speaking{animation:blink 0.8s infinite;}
+  @keyframes pop-in{
+    from{opacity:0; transform:translateY(6px) scale(0.96);}
+    to{opacity:1; transform:translateY(0) scale(1);}
+  }
+  .bot{
+    align-self:flex-start;
+    background:#f1edff;
+    color:#3a2f6b;
+    border-bottom-left-radius:4px;
+  }
+  .user{
+    align-self:flex-end;
+    background:linear-gradient(120deg, var(--blue), #7ee8fa);
+    color:#08324a;
+    border-bottom-right-radius:4px;
+  }
+  .typing{
+    align-self:flex-start;
+    background:#f1edff;
+    padding:10px 16px;
+    border-radius:18px;
+    border-bottom-left-radius:4px;
+    display:flex;
+    gap:4px;
+  }
+  .typing span{
+    width:7px;height:7px;border-radius:50%;
+    background:#8c6bff;
+    animation:blink 1.2s infinite;
+  }
+  .typing span:nth-child(2){animation-delay:.2s;}
+  .typing span:nth-child(3){animation-delay:.4s;}
+  @keyframes blink{
+    0%,80%,100%{opacity:.25; transform:translateY(0);}
+    40%{opacity:1; transform:translateY(-3px);}
+  }
+
+  #chips{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    padding:0 16px 10px;
+    background:white;
+  }
+  .chip{
+    background:white;
+    border:2px solid var(--purple);
+    color:var(--purple);
+    border-radius:20px;
+    padding:7px 13px;
+    font-size:13px;
+    font-weight:700;
+    cursor:pointer;
+    transition:transform 120ms ease, background 120ms ease;
+  }
+  .chip:hover{
+    background:var(--purple);
+    color:white;
+    transform:translateY(-2px);
+  }
+
+  #inputRow{
+    display:flex;
+    gap:8px;
+    padding:14px 16px;
+    border-top:2px solid #f2edff;
+    background:white;
+  }
+  #userInput{
+    flex:1;
+    border:2px solid #e3ddff;
+    border-radius:20px;
+    padding:11px 16px;
+    font-size:15px;
+    font-family:inherit;
+    outline:none;
+  }
+  #userInput:focus{border-color:var(--purple);}
+  #sendBtn{
+    background:linear-gradient(120deg, var(--pink), var(--purple));
+    border:none;
+    color:white;
+    font-weight:700;
+    font-size:15px;
+    padding:0 20px;
+    border-radius:20px;
+    cursor:pointer;
+  }
+  #sendBtn:active{transform:translateY(1px);}
+
+  #micBtn{
+    width:44px;
+    height:44px;
+    border-radius:50%;
+    border:2px solid #e3ddff;
+    background:white;
+    font-size:18px;
+    cursor:pointer;
+    flex-shrink:0;
+    transition:transform 120ms ease, background 120ms ease, border-color 120ms ease;
+  }
+  #micBtn:hover{border-color:var(--purple);}
+  #micBtn:active{transform:translateY(1px);}
+  #micBtn.listening{
+    background:#ff5470;
+    border-color:#ff5470;
+    animation:pulse 1s infinite;
+  }
+  #micBtn:disabled{
+    opacity:.35;
+    cursor:not-allowed;
+  }
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(255,84,112,0.5);}
+    70%{box-shadow:0 0 0 10px rgba(255,84,112,0);}
+    100%{box-shadow:0 0 0 0 rgba(255,84,112,0);}
+  }
+
+  #chat::-webkit-scrollbar{width:8px;}
+  #chat::-webkit-scrollbar-thumb{background:#e3ddff;border-radius:10px;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="header">
+    <div id="avatar">🤖</div>
+    <div id="headerText">
+      <h1>Sparky the Learning Buddy</h1>
+      <p>Ask me anything — I love questions!</p>
+    </div>
+    <button id="voiceToggle" class="off" title="Turn Sparky's voice on">🔇</button>
+  </div>
+  <div id="chat"></div>
+  <div id="chips"></div>
+  <div id="inputRow">
+    <input id="userInput" type="text" placeholder="Type here or tap a button above!" autocomplete="off">
+    <button id="micBtn" title="Tap and speak!">🎤</button>
+    <button id="sendBtn">Send</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const chatEl = document.getElementById('chat');
+  const chipsEl = document.getElementById('chips');
+  const inputEl = document.getElementById('userInput');
+  const sendBtn = document.getElementById('sendBtn');
+  const voiceToggleBtn = document.getElementById('voiceToggle');
+
+  // ---------- voice (Web Speech API, fully offline/no key) ----------
+  let voiceEnabled = false;
+  let cachedVoices = [];
+  const supportsSpeech = 'speechSynthesis' in window;
+
+  function loadVoices(){
+    if(supportsSpeech) cachedVoices = window.speechSynthesis.getVoices();
+  }
+  loadVoices();
+  if(supportsSpeech && 'onvoiceschanged' in window.speechSynthesis){
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+  }
+
+  function pickVoice(){
+    if(!cachedVoices.length) return null;
+    return cachedVoices.find(v => /female|samantha|zira|child|kid/i.test(v.name) && v.lang.startsWith('en'))
+        || cachedVoices.find(v => v.lang && v.lang.startsWith('en'))
+        || cachedVoices[0];
+  }
+
+  function stripForSpeech(text){
+    return text
+      .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE0F}]/gu, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function speakText(text, btnEl){
+    if(!supportsSpeech) return;
+    window.speechSynthesis.cancel();
+    const clean = stripForSpeech(text);
+    if(!clean) return;
+    const utter = new SpeechSynthesisUtterance(clean);
+    utter.rate = 0.95;
+    utter.pitch = 1.15;
+    const v = pickVoice();
+    if(v) utter.voice = v;
+    if(btnEl){
+      utter.onstart = ()=> btnEl.classList.add('speaking');
+      utter.onend = ()=> btnEl.classList.remove('speaking');
+      utter.onerror = ()=> btnEl.classList.remove('speaking');
+    }
+    window.speechSynthesis.speak(utter);
+  }
+
+  voiceToggleBtn.addEventListener('click', ()=>{
+    voiceEnabled = !voiceEnabled;
+    voiceToggleBtn.textContent = voiceEnabled ? '🔊' : '🔇';
+    voiceToggleBtn.classList.toggle('off', !voiceEnabled);
+    voiceToggleBtn.title = voiceEnabled ? "Turn Sparky's voice off" : "Turn Sparky's voice on";
+    if(!voiceEnabled && supportsSpeech) window.speechSynthesis.cancel();
+  });
+
+  // ---------- microphone (Web Speech API speech-to-text, fully offline/no key) ----------
+  const micBtn = document.getElementById('micBtn');
+  const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null;
+  let isListening = false;
+
+  if(SpeechRecognitionCtor){
+    recognition = new SpeechRecognitionCtor();
+    recognition.lang = 'en-US';
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+    recognition.continuous = false;
+
+    recognition.onstart = ()=>{
+      isListening = true;
+      micBtn.classList.add('listening');
+      inputEl.placeholder = "I'm listening... 🎤";
+    };
+
+    recognition.onresult = (e)=>{
+      // Just types what you say into the text box — it does NOT auto-send.
+      // You (or the kid) tap Send (or hit Enter) when it looks right.
+      let transcript = '';
+      for(let i=0;i<e.results.length;i++){
+        transcript += e.results[i][0].transcript;
+      }
+      inputEl.value = transcript;
+    };
+
+    recognition.onerror = (e)=>{
+      isListening = false;
+      micBtn.classList.remove('listening');
+      inputEl.placeholder = 'Type here or tap a button above!';
+      if(e.error === 'not-allowed' || e.error === 'service-not-allowed'){
+        botSay("I need permission to use the microphone! Please allow microphone access in your browser and try again. 🎤");
+      } else if(e.error === 'no-speech'){
+        botSay("I didn't catch that! Tap the microphone and try talking again. 🎤");
+      } else if(e.error === 'audio-capture'){
+        botSay("I can't find a microphone on this device. 🎤");
+      } else if(e.error !== 'aborted'){
+        botSay("Hmm, something went wrong with the microphone. Let's try again, or you can just type! 🎤");
+      }
+    };
+
+    recognition.onend = ()=>{
+      isListening = false;
+      micBtn.classList.remove('listening');
+      inputEl.placeholder = 'Type here or tap a button above!';
+      inputEl.focus();
+    };
+
+    function startListening(){
+      if(isListening) return;
+      if(supportsSpeech) window.speechSynthesis.cancel();
+      inputEl.value = '';
+      try{
+        recognition.start();
+      }catch(err){ /* already starting, ignore */ }
+    }
+    function stopListening(){
+      if(isListening) recognition.stop();
+    }
+
+    micBtn.addEventListener('click', ()=>{
+      if(isListening){
+        stopListening();
+      } else {
+        startListening();
+      }
+    });
+    // Also respond to touchend directly so it feels instant on phones/tablets
+    micBtn.addEventListener('touchend', (e)=>{
+      e.preventDefault();
+      if(isListening){
+        stopListening();
+      } else {
+        startListening();
+      }
+    });
+  } else {
+    micBtn.disabled = true;
+    micBtn.title = 'Voice input is not supported in this browser (try Chrome or Edge)';
+  }
+
+  // ---------- knowledge base ----------
+  const jokes = [
+    "Why did the bee get married? Because he found his honey! 🐝💍",
+    "What do you call a dinosaur that crashes his car? Tyrannosaurus Wrecks! 🦖🚗",
+    "Why don't scientists trust atoms? Because they make up everything! ⚛️😄",
+    "What do you call a fish with no eyes? A fsh! 🐟",
+    "Why did the math book look sad? It had too many problems. 📖➗",
+    "What do you call cheese that isn't yours? Nacho cheese! 🧀",
+    "Why did the cookie go to the doctor? Because it felt crummy! 🍪",
+    "What do you call a bear with no teeth? A gummy bear! 🐻",
+    "Why can't you give Elsa a balloon? She'll let it go! 🎈❄️",
+    "What did one wall say to the other wall? I'll meet you at the corner! 🧱"
+  ];
+
+  const riddles = [
+    {q:"I have keys but no locks, I have space but no room, you can enter but not go outside. What am I?", a:["keyboard"], hint:"You're probably typing on one right now! ⌨️"},
+    {q:"What has a face and two hands but no arms or legs?", a:["clock","a clock"], hint:"It's on the wall and tells you something important! 🕐"},
+    {q:"The more you take, the more you leave behind. What am I?", a:["footsteps","footprints"], hint:"Think about walking on the beach! 👣"},
+    {q:"What has to be broken before you can use it?", a:["egg","an egg"], hint:"Chickens make these! 🥚"},
+    {q:"I'm tall when I'm young and short when I'm old. What am I?", a:["candle","a candle"], hint:"I give you light and I melt! 🕯️"},
+    {q:"What has one eye but can't see?", a:["needle","a needle"], hint:"You use it for sewing! 🧵"},
+    {q:"What gets wetter the more it dries?", a:["towel","a towel"], hint:"You use it after a bath! 🛁"}
+  ];
+
+  const facts = {
+    animals:[
+      "Octopuses have three hearts and blue blood! 🐙💙",
+      "A group of flamingos is called a 'flamboyance'! 🦩",
+      "Butterflies taste with their feet! 🦋",
+      "Elephants are the only animals that can't jump! 🐘",
+      "A shrimp's heart is in its head! 🦐",
+      "Koalas sleep up to 22 hours a day! 🐨💤",
+      "Honey never spoils — archaeologists found 3000-year-old honey that was still good! 🍯",
+      "A snail can sleep for three years! 🐌"
+    ],
+    space:[
+      "One day on Venus is longer than one year on Venus! 🪐",
+      "There are more stars in the universe than grains of sand on every beach on Earth! ✨",
+      "The footprints on the Moon will stay there for millions of years — there's no wind to blow them away! 👣🌕",
+      "Saturn could float in water because it's mostly made of gas! 🪐",
+      "A full spacesuit costs about the same as a fighter jet! 👨‍🚀",
+      "The Sun makes up 99.8% of the mass of our whole solar system! ☀️",
+      "It rains diamonds on Jupiter and Saturn! 💎"
+    ],
+    dinosaurs:[
+      "Some dinosaurs had feathers, just like birds today! 🦖🪶",
+      "The Spinosaurus was even bigger than the T-Rex! 🦕",
+      "Dinosaurs lived on Earth for about 165 million years! ⏳",
+      "The word 'dinosaur' means 'terrible lizard' in Greek! 🦖",
+      "Some dinosaurs were as small as a chicken! 🐔",
+      "Scientists think a giant asteroid ended the age of dinosaurs! ☄️"
+    ],
+    ocean:[
+      "The ocean covers more than 70% of the Earth's surface! 🌊",
+      "We've explored less than 20% of the ocean — space is more mapped than the sea! 🌊🚀",
+      "The blue whale is the largest animal to have ever lived on Earth! 🐋",
+      "Some jellyfish are basically immortal! 🎐",
+      "The Pacific Ocean is so big it's bigger than all the land on Earth combined! 🌏"
+    ],
+    body:[
+      "Your heart beats about 100,000 times a day! ❤️",
+      "You blink about 20 times every minute! 👀",
+      "Your bones are actually stronger than steel — pound for pound! 🦴",
+      "It takes about 17 muscles to smile! 😄",
+      "Your nose can remember about 50,000 different smells! 👃"
+    ],
+    weather:[
+      "No two snowflakes are exactly alike! ❄️",
+      "Lightning is hotter than the surface of the Sun! ⚡☀️",
+      "A single bolt of lightning could power a lightbulb for a whole month! ⚡💡",
+      "Raindrops aren't actually shaped like teardrops — they're shaped more like tiny hamburger buns! 🌧️"
+    ]
+  };
+
+  const categoryLabel = {
+    animals:"Animal Facts", space:"Space Facts", dinosaurs:"Dinosaur Facts",
+    ocean:"Ocean Facts", body:"Body Facts", weather:"Weather Facts"
+  };
+
+  const usedJokes = new Set();
+  const usedFacts = {animals:new Set(), space:new Set(), dinosaurs:new Set(), ocean:new Set(), body:new Set(), weather:new Set()};
+  let currentRiddle = null;
+  let lastCategory = null;
+  let userName = null;
+
+  // ---------- helpers ----------
+  function pickFresh(list, usedSet){
+    if(usedSet.size >= list.length) usedSet.clear();
+    let idx;
+    do{ idx = Math.floor(Math.random()*list.length); } while(usedSet.has(idx));
+    usedSet.add(idx);
+    return list[idx];
+  }
+
+  function addMessage(text, sender){
+    const el = document.createElement('div');
+    el.className = 'msg ' + sender;
+
+    const textSpan = document.createElement('span');
+    textSpan.textContent = text;
+    el.appendChild(textSpan);
+
+    if(sender === 'bot' && supportsSpeech){
+      const speakBtn = document.createElement('button');
+      speakBtn.className = 'speakBtn';
+      speakBtn.textContent = '🔊';
+      speakBtn.title = 'Hear this';
+      speakBtn.addEventListener('click', ()=> speakText(text, speakBtn));
+      el.appendChild(speakBtn);
+
+      if(voiceEnabled){
+        speakText(text, speakBtn);
+      }
+    }
+
+    chatEl.appendChild(el);
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+
+  function showTyping(){
+    const el = document.createElement('div');
+    el.className = 'typing';
+    el.id = 'typingIndicator';
+    el.innerHTML = '<span></span><span></span><span></span>';
+    chatEl.appendChild(el);
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+  function hideTyping(){
+    const el = document.getElementById('typingIndicator');
+    if(el) el.remove();
+  }
+
+  function botSay(text, delay){
+    showTyping();
+    setTimeout(()=>{
+      hideTyping();
+      addMessage(text, 'bot');
+    }, delay || 500 + Math.random()*350);
+  }
+
+  function setChips(list){
+    chipsEl.innerHTML = '';
+    list.forEach(label=>{
+      const b = document.createElement('button');
+      b.className = 'chip';
+      b.textContent = label;
+      b.addEventListener('click', ()=> submitText(label));
+      chipsEl.appendChild(b);
+    });
+  }
+
+  function mainMenuChips(){
+    return ["🐾 Animal Facts","🚀 Space Facts","🦖 Dinosaur Facts","🌊 Ocean Facts","😂 Tell me a joke!","🧩 Riddle time!","➕ Math help"];
+  }
+
+  // ---------- safe math parser ----------
+  function extractMathExpr(raw){
+    let t = ' ' + raw.toLowerCase() + ' ';
+    t = t.replace(/what is|what's|whats|calculate|solve|equal to|equals|how much is/g, ' ');
+    t = t.replace(/\bplus\b/g,'+').replace(/\bminus\b/g,'-');
+    t = t.replace(/\btimes\b|\bmultiplied by\b|\bmultiply by\b/g,'*');
+    t = t.replace(/\bdivided by\b|\bdivide by\b|\bover\b/g,'/');
+    t = t.replace(/[^0-9+\-*/().\s]/g, ' ');
+    t = t.trim();
+    if(t && /\d/.test(t) && /[+\-*/]/.test(t)) return t;
+    return null;
+  }
+
+  function calcExpr(expr){
+    const tokens = expr.match(/\d+(\.\d+)?|[+\-*/()]/g);
+    if(!tokens) return null;
+    let pos = 0;
+
+    function peek(){ return tokens[pos]; }
+    function next(){ return tokens[pos++]; }
+
+    function parseExpr(){
+      let val = parseTerm();
+      while(peek()==='+' || peek()==='-'){
+        const op = next();
+        const rhs = parseTerm();
+        val = op==='+' ? val+rhs : val-rhs;
+      }
+      return val;
+    }
+    function parseTerm(){
+      let val = parseFactor();
+      while(peek()==='*' || peek()==='/'){
+        const op = next();
+        const rhs = parseFactor();
+        if(op==='/'){
+          if(rhs===0) throw new Error('divzero');
+          val = val/rhs;
+        } else {
+          val = val*rhs;
+        }
+      }
+      return val;
+    }
+    function parseFactor(){
+      if(peek()==='-'){ next(); return -parseFactor(); }
+      if(peek()==='('){
+        next();
+        const val = parseExpr();
+        if(peek()===')') next();
+        return val;
+      }
+      const t = next();
+      const n = parseFloat(t);
+      if(isNaN(n)) throw new Error('bad token');
+      return n;
+    }
+
+    try{
+      const result = parseExpr();
+      if(pos !== tokens.length) return null;
+      return result;
+    }catch(e){
+      if(e.message==='divzero') return 'divzero';
+      return null;
+    }
+  }
+
+  // ---------- conversation logic ----------
+  function handleInput(rawText){
+    const text = rawText.trim();
+    const lower = text.toLowerCase();
+
+    // 1) waiting for riddle answer
+    if(currentRiddle){
+      const correct = currentRiddle.a.some(ans => lower.includes(ans));
+      if(correct){
+        botSay("🎉 YES! That's exactly right! You're so smart!");
+        currentRiddle = null;
+        setChips(["🧩 Another riddle!", ...mainMenuChips()]);
+      } else if(lower.includes('hint') || lower.includes('i don\'t know') || lower.includes('idk') || lower.includes('give up')){
+        botSay("Here's a hint: " + currentRiddle.hint);
+        setChips(["🙋 I know it!","🧩 Skip this riddle"]);
+      } else if(lower.includes('skip')){
+        botSay("No worries! The answer was: " + currentRiddle.a[0] + ". Want to try another? 🧩");
+        currentRiddle = null;
+        setChips(["🧩 Another riddle!", ...mainMenuChips()]);
+      } else {
+        botSay("Hmm, not quite! Want a hint? Just say 'hint'! 🤔");
+      }
+      return;
+    }
+
+    // 2) greetings
+    if(/^(hi|hello|hey|hiya|yo|good morning|good afternoon)\b/.test(lower)){
+      botSay((userName ? "Hi again, "+userName+"! 👋" : "Hello there! 👋 I'm Sparky! What's your name?"));
+      setChips(mainMenuChips());
+      return;
+    }
+
+    // 3) name intro
+    let nameMatch = lower.match(/my name is (\w+)/) || lower.match(/i'?m (\w+)/) || lower.match(/i am (\w+)/);
+    if(nameMatch && nameMatch[1] && !['fine','good','okay','ready','sad','happy','bored'].includes(nameMatch[1])){
+      userName = nameMatch[1][0].toUpperCase() + nameMatch[1].slice(1);
+      botSay("Nice to meet you, " + userName + "! 🎉 What would you like to explore today?");
+      setChips(mainMenuChips());
+      return;
+    }
+
+    // 4) thanks / bye
+    if(/thank/.test(lower)){
+      botSay("You're so welcome! 😊 Anything else you're curious about?");
+      setChips(mainMenuChips());
+      return;
+    }
+    if(/^(bye|goodbye|see ya|see you)\b/.test(lower)){
+      botSay("Bye bye! 👋 Come back soon, I'll be right here!");
+      setChips(mainMenuChips());
+      return;
+    }
+
+    // 5) feelings
+    if(/\b(sad|upset|crying|unhappy)\b/.test(lower)){
+      botSay("Aww, I'm sorry you're feeling sad. 💛 Want to hear a joke to cheer you up?");
+      setChips(["😂 Tell me a joke!","🐾 Animal Facts"]);
+      return;
+    }
+    if(/\b(happy|excited|great|awesome)\b/.test(lower)){
+      botSay("Yay, that makes me happy too! 🎉 What should we explore next?");
+      setChips(mainMenuChips());
+      return;
+    }
+    if(/\b(bored)\b/.test(lower)){
+      botSay("Let's fix that! Want a riddle, a joke, or a wild fact? 🎈");
+      setChips(["🧩 Riddle time!","😂 Tell me a joke!","🚀 Space Facts"]);
+      return;
+    }
+
+    // 6) who are you / help
+    if(/who are you|what can you do|help/.test(lower)){
+      botSay("I'm Sparky, your learning buddy! 🤖 I know fun facts about animals, space, dinosaurs, the ocean, your body, and weather. I can also tell jokes, ask riddles, and help with math!");
+      setChips(mainMenuChips());
+      return;
+    }
+
+    // 7) math
+    const mathExpr = extractMathExpr(lower);
+    if(mathExpr){
+      const result = calcExpr(mathExpr);
+      if(result === 'divzero'){
+        botSay("Oops! We can't divide by zero — that's a math mystery even I can't solve! 🤯");
+      } else if(result !== null){
+        const clean = Number.isInteger(result) ? result : Math.round(result*1000)/1000;
+        botSay(mathExpr + " = " + clean + " ✅ Great math question!");
+      } else {
+        botSay("Hmm, that math puzzle is a bit tricky for me! Try something like '7 + 5' or 'what is 12 times 3'.");
+      }
+      setChips(["➕ Another math question","🧩 Riddle time!", ...mainMenuChips().slice(0,3)]);
+      return;
+    }
+
+    // 8) jokes
+    if(/joke|funny|laugh/.test(lower)){
+      const joke = pickFresh(jokes, usedJokes);
+      botSay(joke);
+      setChips(["😂 Another joke!", ...mainMenuChips()]);
+      return;
+    }
+
+    // 9) riddles
+    if(/riddle|puzzle/.test(lower)){
+      currentRiddle = pickFresh(riddles, new Set()); // riddles always fresh-ish via random
+      botSay("Here's a riddle for you: " + currentRiddle.q);
+      setChips(["💡 Give me a hint","⏭️ Skip this riddle"]);
+      return;
+    }
+
+    // 10) fact categories
+    for(const cat of Object.keys(facts)){
+      const catWords = {
+        animals:/animal/, space:/space|planet|star|galaxy/, dinosaurs:/dino/,
+        ocean:/ocean|sea|fish|whale/, body:/body|heart|human/, weather:/weather|rain|snow|lightning/
+      };
+      if(catWords[cat].test(lower)){
+        const fact = pickFresh(facts[cat], usedFacts[cat]);
+        lastCategory = cat;
+        botSay("🌟 Did you know? " + fact);
+        setChips(["🔁 Another " + categoryLabel[cat], ...mainMenuChips().filter(c=>!c.includes(categoryLabel[cat]))]);
+        return;
+      }
+    }
+
+    // 11) "another one" follow-up
+    if(/another|more|again/.test(lower) && lastCategory){
+      const fact = pickFresh(facts[lastCategory], usedFacts[lastCategory]);
+      botSay("🌟 Here's another: " + fact);
+      setChips(["🔁 Another " + categoryLabel[lastCategory], ...mainMenuChips()]);
+      return;
+    }
+
+    // 12) fallback
+    botSay("Ooh, that's an interesting question! I don't know that one yet, but I love facts about animals, space, dinosaurs, the ocean, your body, and weather. I can also do jokes, riddles, and math! 🌈");
+    setChips(mainMenuChips());
+  }
+
+  function submitText(text){
+    // strip emoji prefix for a cleaner chat bubble
+    const cleanText = text.replace(/^[^\w]*\s*/, '').trim() || text;
+    addMessage(cleanText, 'user');
+    handleInput(text);
+  }
+
+  sendBtn.addEventListener('click', ()=>{
+    const val = inputEl.value.trim();
+    if(!val) return;
+    submitText(val);
+    inputEl.value = '';
+  });
+  inputEl.addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter'){
+      sendBtn.click();
+    }
+  });
+
+  // opening message
+  showTyping();
+  setTimeout(()=>{
+    hideTyping();
+    addMessage("Hi there! I'm Sparky, your friendly learning buddy! 🤖✨ Tap a button below or type a question — I love animals, space, dinosaurs, jokes, riddles, and math!", 'bot');
+    setChips(mainMenuChips());
+  }, 700);
+
+})();
+</script>
+</body>
+</html>

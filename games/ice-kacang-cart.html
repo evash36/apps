@@ -404,6 +404,7 @@ const kid = {
   wave: 0
 };
 let snowCount = 0, countTick = 0;
+function servable() { return snowCount > 60 || bits.length > 0; }
 let serveState = 0, serveT = 0, bowlDX = 0, biteT = 0;
 const hearts = [];
 
@@ -432,7 +433,7 @@ cv.addEventListener('pointerdown', e => {
   if (resetAnim > 0 || serveState > 0) return;
 
   if (p.x > 16 && p.x < 148 && p.y > 292 && p.y < 552) {   // the kid
-    if (snowCount > 1200) { serveState = 1; serveT = 0; held = null; cranking = false; pourOff(); shaveOff(); if (hintStage === 3) { hintStage = 4; hintT = 1; } }
+    if (servable()) { serveState = 1; serveT = 0; held = null; cranking = false; pourOff(); shaveOff(); if (hintStage === 3) { hintStage = 4; hintT = 1; } }
     else { kid.wave = 1; kid.exc = Math.min(1, kid.exc + 0.5); thud(420, 0.05); }
     return;
   }
@@ -511,9 +512,9 @@ function update() {
   if (wantCrank && reload <= 0) {
     ice -= 0.00085;
     if (ice <= 0) { ice = 0; reload = 1; thud(150, 0.22); }
-    spawnPhase += 0.055;
-    const cxs = CX + Math.sin(spawnPhase) * 15 + Math.sin(spawnPhase * 2.3) * 5;
-    const n = Math.round(6 * (crankSpeed / 0.2));
+    spawnPhase += 0.033;
+    const cxs = CX + Math.sin(spawnPhase) * 54 + Math.sin(spawnPhase * 2.7) * 11;
+    const n = Math.round(8 * (crankSpeed / 0.2));
     for (let k = 0; k < n; k++) {
       const x = cxs + (Math.random() - 0.5) * 16;
       addSnow(Math.round((x - GX0 - CELL / 2) / CELL), 16 + ((Math.random() * 4) | 0));
@@ -1168,7 +1169,7 @@ function drawKidBody() {
   const k = kid, hx = k.x + k.sway, hy = k.hy + k.bob;
   ctx.save();
   // servable glow
-  if (snowCount > 1200 && serveState === 0) {
+  if (servable() && serveState === 0) {
     const pulse = 0.35 + Math.sin(Date.now() / 380) * 0.2;
     const rg = ctx.createRadialGradient(hx, hy + 40, 20, hx, hy + 40, 130);
     rg.addColorStop(0, 'rgba(255,211,94,' + (pulse * 0.5) + ')');
@@ -1327,7 +1328,7 @@ function drawKidEmote() {
     ctx.bezierCurveTo(5, -10, 9, -3, 0, 4); ctx.fill();
     ctx.restore();
   }
-  const ready = snowCount > 1200 && serveState === 0;
+  const ready = servable() && serveState === 0;
   const wow = k.exc > 0.55 && serveState === 0 && !ready;
   if (!ready && !wow) return;
   const by = hy - 74 + Math.sin(Date.now() / 420) * 3;

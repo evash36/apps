@@ -1,0 +1,1455 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ice Kacang Cart</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Nunito:wght@600;800;900&display=swap">
+<style>
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: radial-gradient(130% 110% at 50% -10%, #33505c 0%, #182830 55%, #0e171d 100%);
+    overflow: hidden;
+    font-family: 'Nunito', system-ui, -apple-system, sans-serif;
+    color: #f7ecd8;
+  }
+  #wrap { position: fixed; inset: 0; display: grid; place-items: center; padding: 10px; box-sizing: border-box; }
+  canvas {
+    display: block;
+    touch-action: none;
+    border-radius: 16px;
+    box-shadow: 0 26px 70px rgba(0,0,0,.6), 0 0 0 1px rgba(247,236,216,.07);
+    cursor: crosshair;
+    -webkit-user-select: none; user-select: none;
+  }
+</style>
+
+</head>
+<body style="margin:0">
+<div id="wrap"><canvas id="cv"></canvas></div>
+
+<script>
+(function () {
+"use strict";
+
+/* ---------------------------------------------------------------- stage */
+const W = 1000, H = 700;
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function fit() {
+  const pad = 20;
+  const aw = Math.max(320, window.innerWidth - pad);
+  const ah = Math.max(240, window.innerHeight - pad);
+  const s = Math.min(aw / W, ah / H);
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.style.width = (W * s) + 'px';
+  cv.style.height = (H * s) + 'px';
+  cv.width = Math.round(W * s * dpr);
+  cv.height = Math.round(H * s * dpr);
+  ctx.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0);
+}
+window.addEventListener('resize', fit);
+fit();
+
+/* --------------------------------------------------------------- palette */
+const C = {
+  tileHi:   '#8fc4b4', tile: '#7cb2a3', tileLo: '#659a8c', grout: '#5b8b7e',
+  wallTop:  '#3e6f68',
+  steelHi:  '#e2e9ea', steel: '#c3ced1', steelLo: '#8d9a9e', steelDk: '#5f6b6f',
+  teak:     '#8a5330', teakLo: '#5d3620', teakHi: '#a5673f',
+  enamel:   '#d8402c', cream: '#f7ecd8', ink: '#2a1d16',
+  iceHi:    '#ffffff', ice: '#f2f8ff', iceSh: '#a9c6de'
+};
+
+const SYRUPS = [
+  { name: 'Rose',      col: [255,  61, 120], liq: '#ff3d78', cap: '#f2f2f2' },
+  { name: 'Pandan',    col: [ 53, 180,  99], liq: '#35b463', cap: '#f2f2f2' },
+  { name: 'Blue Pea',  col: [ 42,  95, 208], liq: '#2a5fd0', cap: '#f2f2f2' },
+  { name: 'Mango',     col: [255, 164,  31], liq: '#ffa41f', cap: '#f2f2f2' },
+  { name: 'Gula',      col: [125,  66,  22], liq: '#7d4216', cap: '#d9b98a', thick: true },
+  { name: 'Milk',      col: [255, 250, 240], liq: '#fffaf0', cap: '#d8402c', thick: true }
+];
+
+const TOPPINGS = [
+  { name: 'Red Bean',  kind: 'bean',   col: '#7d2030', col2: '#a63a4a', r: 5.4 },
+  { name: 'Corn',      kind: 'corn',   col: '#ffc43d', col2: '#ffe08a', r: 4.6 },
+  { name: 'Attap',     kind: 'attap',  col: '#f4efdd', col2: '#ffffff', r: 6.2 },
+  { name: 'Jelly',     kind: 'jelly',  col: '#182626', col2: '#3c5a58', r: 5.8 },
+  { name: 'Cendol',    kind: 'cendol', col: '#3fae5a', col2: '#6fd287', r: 4.4 },
+  { name: 'Peanut',    kind: 'peanut', col: '#d9a86a', col2: '#f0cb9a', r: 5.2 }
+];
+
+/* ------------------------------------------------------------- geometry */
+const CX = 335;
+const RIM_Y = 415, RIM_HW = 100;
+const BASE_Y = 505, BASE_HW = 58;
+const COUNTER_Y = 498, COUNTER_FRONT = 672;
+
+const CELL = 3, GX0 = 190, GY0 = 204;
+const COLS = 95, ROWS = 102, N = COLS * ROWS;
+
+const colX = new Float32Array(COLS);
+for (let c = 0; c < COLS; c++) colX[c] = GX0 + c * CELL + CELL / 2;
+const rowY = new Float32Array(ROWS);
+for (let r = 0; r < ROWS; r++) rowY[r] = GY0 + r * CELL + CELL / 2;
+
+function hwAt(y) {
+  if (y <= RIM_Y) return RIM_HW;
+  const t = Math.min(1, (y - RIM_Y) / (BASE_Y - RIM_Y));
+  return BASE_HW + (RIM_HW - BASE_HW) * Math.pow(1 - t, 0.55);
+}
+const rowFree = new Uint8Array(ROWS), rowHalf = new Float32Array(ROWS), rowWall = new Uint8Array(ROWS);
+for (let r = 0; r < ROWS; r++) {
+  const y = rowY[r];
+  rowWall[r] = y >= BASE_Y ? 1 : 0;
+  rowFree[r] = y < RIM_Y ? 1 : 0;
+  rowHalf[r] = hwAt(y);
+}
+
+/* ------------------------------------------------------------ snow grid */
+const INSIDE = 0, OUT = 1, WALL = 2;
+const filled = new Uint8Array(N);
+const cr = new Uint8Array(N), cg = new Uint8Array(N), cb = new Uint8Array(N);
+const syr = new Uint8Array(N);
+const rest = new Uint8Array(N);
+const inAct = new Uint8Array(N);
+let active = [];
+const colTop = new Int16Array(COLS);
+
+function cls(c, r) {
+  if (r >= ROWS) return WALL;
+  if (r < 0) return INSIDE;
+  if (rowWall[r]) return WALL;
+  if (c < 0 || c >= COLS) return rowFree[r] ? OUT : WALL;
+  if (rowFree[r]) return INSIDE;
+  return Math.abs(colX[c] - CX) <= rowHalf[r] ? INSIDE : OUT;
+}
+
+function wake(c, r) {
+  for (let d = -1; d <= 1; d++) {
+    const cc = c + d, rr = r - 1;
+    if (cc < 0 || cc >= COLS || rr < 0) continue;
+    const j = rr * COLS + cc;
+    if (filled[j] && !inAct[j]) { inAct[j] = 1; rest[j] = 4; active.push(j); }
+  }
+}
+
+let spillL = 0, spillR = 0;
+const spillFx = [];
+
+function tryTo(i, c, r, nc, nr) {
+  const k = cls(nc, nr);
+  if (k === WALL) return -1;
+  if (k === OUT) {
+    filled[i] = 0; syr[i] = 0;
+    const side = colX[Math.max(0, Math.min(COLS - 1, nc))] < CX ? -1 : 1;
+    if (serveState === 0) {
+      if (side < 0) spillL = Math.min(1, spillL + 0.010); else spillR = Math.min(1, spillR + 0.010);
+    }
+    if (spillFx.length < 90 && serveState === 0) spillFx.push({ x: GX0 + nc * CELL, y: rowY[Math.max(0, nr)], vy: 0.6, vx: side * 0.25, life: 1 });
+    wake(c, r);
+    return -2;
+  }
+  const j = nr * COLS + nc;
+  if (filled[j]) return -1;
+  filled[j] = 1; cr[j] = cr[i]; cg[j] = cg[i]; cb[j] = cb[i]; syr[j] = syr[i];
+  filled[i] = 0; syr[i] = 0;
+  rest[j] = 4;
+  wake(c, r);
+  return j;
+}
+
+function stepSnow() {
+  if (!active.length) return;
+  const next = [];
+  for (let n = 0; n < active.length; n++) {
+    const i = active[n];
+    inAct[i] = 0;
+    if (!filled[i]) continue;
+    const c = i % COLS, r = (i / COLS) | 0;
+    let res = tryTo(i, c, r, c, r + 1);
+    if (res === -1 && Math.random() < 0.42) {
+      const d = Math.random() < 0.5 ? -1 : 1;
+      res = tryTo(i, c, r, c + d, r + 1);
+      if (res === -1) res = tryTo(i, c, r, c - d, r + 1);
+    }
+    if (res >= 0) {
+      if (!inAct[res]) { inAct[res] = 1; next.push(res); }
+    } else if (res === -1) {
+      if (rest[i] > 0) { rest[i]--; if (!inAct[i]) { inAct[i] = 1; next.push(i); } }
+    }
+    if (next.length > 4000) break;
+  }
+  active = next;
+}
+
+function addSnow(c, r) {
+  if (c < 0 || c >= COLS || r < 0 || r >= ROWS) return;
+  let j = r * COLS + c;
+  if (cls(c, r) !== INSIDE) return;
+  let guard = 0;
+  while (filled[j] && r > 0 && guard++ < 40) { r--; j = r * COLS + c; }
+  if (filled[j]) return;
+  const v = 242 + ((Math.random() * 13) | 0);
+  filled[j] = 1; cr[j] = v; cg[j] = Math.min(255, v + 4); cb[j] = 255; syr[j] = 0; rest[j] = 4;
+  if (!inAct[j]) { inAct[j] = 1; active.push(j); }
+}
+
+/* ------------------------------------------------------------ syrup dye */
+const drips = [];
+
+function dye(c, r, col, strength, depth) {
+  let hit = false;
+  for (let k = 0; k < depth; k++) {
+    const rr = r + k;
+    if (rr < 0 || rr >= ROWS) break;
+    const spread = k < 5 ? 3 : 2;
+    for (let d = -spread; d <= spread; d++) {
+      const cc = c + d;
+      if (cc < 0 || cc >= COLS) continue;
+      const j = rr * COLS + cc;
+      if (!filled[j]) continue;
+      hit = true;
+      const fall = 1 - k / depth;
+      const lat = 1 - Math.abs(d) / (spread + 1);
+      const a = Math.min(0.95, strength * fall * lat);
+      cr[j] += (col[0] - cr[j]) * a;
+      cg[j] += (col[1] - cg[j]) * a;
+      cb[j] += (col[2] - cb[j]) * a;
+      if (k < 2) syr[j] = Math.max(syr[j], (a * 235) | 0);
+    }
+  }
+  return hit;
+}
+
+/* -------------------------------------------------------------- toppings */
+const bits = [];
+
+function cellFilledAt(x, y) {
+  const c = Math.round((x - GX0 - CELL / 2) / CELL);
+  const r = Math.round((y - GY0 - CELL / 2) / CELL);
+  if (c < 0 || c >= COLS || r < 0 || r >= ROWS) return false;
+  return !!filled[r * COLS + c];
+}
+
+function addBit(def, x, y, vx, vy) {
+  if (bits.length > 150) bits.shift();
+  bits.push({
+    def, x, y, vx, vy,
+    r: def.r * (0.85 + Math.random() * 0.3),
+    rot: Math.random() * Math.PI * 2,
+    rv: (Math.random() - 0.5) * 0.28,
+    sleep: 0
+  });
+}
+
+function stepBits() {
+  for (const b of bits) {
+    if (b.sleep > 12) {
+      if (cellFilledAt(b.x, b.y + b.r + 1)) continue;
+      b.sleep = 0;
+    }
+    b.vy += 0.34;
+    b.vx *= 0.985;
+    b.x += b.vx; b.y += b.vy;
+    b.rot += b.rv; b.rv *= 0.96;
+
+    // bowl walls
+    if (b.y > RIM_Y - 6) {
+      const hw = hwAt(Math.min(BASE_Y, b.y)) - b.r - 1;
+      if (b.x < CX - hw) { b.x = CX - hw; b.vx = Math.abs(b.vx) * 0.3; }
+      if (b.x > CX + hw) { b.x = CX + hw; b.vx = -Math.abs(b.vx) * 0.3; }
+    } else {
+      if (b.x < GX0 + 4) { b.x = GX0 + 4; b.vx *= -0.4; }
+      if (b.x > GX0 + COLS * CELL - 4) { b.x = GX0 + COLS * CELL - 4; b.vx *= -0.4; }
+    }
+    // floor / snow
+    let landed = false;
+    if (b.y + b.r > BASE_Y - 2) { b.y = BASE_Y - 2 - b.r; landed = true; }
+    let guard = 0;
+    while (cellFilledAt(b.x, b.y + b.r) && guard++ < 26) { b.y -= 1; landed = true; }
+    if (landed) {
+      if (b.vy > 1.6) { b.rv += (Math.random() - 0.5) * 0.3; }
+      b.vy = b.vy > 1 ? -b.vy * 0.16 : 0;
+      b.vx *= 0.62;
+      if (Math.abs(b.vx) < 0.08 && Math.abs(b.vy) < 0.3) b.sleep++; else b.sleep = 0;
+    } else b.sleep = 0;
+  }
+  // separation
+  for (let i = 0; i < bits.length; i++) {
+    const a = bits[i];
+    for (let j = i + 1; j < bits.length; j++) {
+      const b = bits[j];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const rr = a.r + b.r;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > rr * rr || d2 < 0.0001) continue;
+      const d = Math.sqrt(d2);
+      const push = (rr - d) * 0.5;
+      const nx = dx / d, ny = dy / d;
+      a.x -= nx * push; a.y -= ny * push;
+      b.x += nx * push; b.y += ny * push;
+      a.sleep = 0; b.sleep = 0;
+    }
+  }
+}
+
+/* ----------------------------------------------------------------- audio */
+let AC = null, master = null, nbuf = null;
+function ac() {
+  if (!AC) {
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    master = AC.createGain(); master.gain.value = 0.85; master.connect(AC.destination);
+  }
+  if (AC.state === 'suspended') AC.resume();
+  return AC;
+}
+function noiseBuf() {
+  const a = ac();
+  if (!nbuf) {
+    nbuf = a.createBuffer(1, a.sampleRate * 2, a.sampleRate);
+    const d = nbuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  return nbuf;
+}
+function thud(f, g) {
+  const a = ac(), t = a.currentTime;
+  const o = a.createOscillator(), gn = a.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 0.45, t + 0.13);
+  gn.gain.setValueAtTime(g, t); gn.gain.exponentialRampToValueAtTime(0.0008, t + 0.16);
+  o.connect(gn).connect(master); o.start(t); o.stop(t + 0.18);
+}
+function burst(freq, q, g, dur) {
+  const a = ac(), t = a.currentTime;
+  const s = a.createBufferSource(); s.buffer = noiseBuf(); s.loop = true;
+  const bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = freq; bp.Q.value = q;
+  const gn = a.createGain();
+  gn.gain.setValueAtTime(g, t); gn.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+  s.connect(bp).connect(gn).connect(master); s.start(t); s.stop(t + dur + 0.02);
+}
+function clink() {
+  const a = ac(), t = a.currentTime;
+  [1380, 2270].forEach((f, i) => {
+    const o = a.createOscillator(), gn = a.createGain();
+    o.type = 'sine'; o.frequency.value = f;
+    gn.gain.setValueAtTime(0.11 / (i + 1), t); gn.gain.exponentialRampToValueAtTime(0.0006, t + 0.5);
+    o.connect(gn).connect(master); o.start(t); o.stop(t + 0.55);
+  });
+}
+
+let shaveNodes = null;
+function shaveOn() {
+  if (shaveNodes) return;
+  const a = ac(), t = a.currentTime;
+  const s = a.createBufferSource(); s.buffer = noiseBuf(); s.loop = true;
+  const bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2900; bp.Q.value = 1.1;
+  const g = a.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.14, t + 0.09);
+  const mo = a.createOscillator(); mo.type = 'sawtooth'; mo.frequency.value = 84;
+  const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 260;
+  const mg = a.createGain(); mg.gain.setValueAtTime(0.0001, t); mg.gain.linearRampToValueAtTime(0.05, t + 0.12);
+  s.connect(bp).connect(g).connect(master);
+  mo.connect(lp).connect(mg).connect(master);
+  s.start(t); mo.start(t);
+  shaveNodes = { s, mo, g, mg, bp };
+}
+function shaveOff() {
+  if (!shaveNodes) return;
+  const a = ac(), t = a.currentTime;
+  const n = shaveNodes; shaveNodes = null;
+  n.g.gain.cancelScheduledValues(t); n.g.gain.setValueAtTime(n.g.gain.value, t); n.g.gain.linearRampToValueAtTime(0.0001, t + 0.14);
+  n.mg.gain.cancelScheduledValues(t); n.mg.gain.setValueAtTime(n.mg.gain.value, t); n.mg.gain.linearRampToValueAtTime(0.0001, t + 0.2);
+  n.s.stop(t + 0.25); n.mo.stop(t + 0.28);
+}
+
+let pourNodes = null;
+function pourOn() {
+  if (pourNodes) return;
+  const a = ac(), t = a.currentTime;
+  const s = a.createBufferSource(); s.buffer = noiseBuf(); s.loop = true;
+  const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1000; lp.Q.value = 3;
+  const lfo = a.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 5.5;
+  const lg = a.createGain(); lg.gain.value = 340;
+  lfo.connect(lg).connect(lp.frequency);
+  const g = a.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.075, t + 0.12);
+  s.connect(lp).connect(g).connect(master);
+  s.start(t); lfo.start(t);
+  pourNodes = { s, lfo, g };
+}
+function pourOff() {
+  if (!pourNodes) return;
+  const a = ac(), t = a.currentTime;
+  const n = pourNodes; pourNodes = null;
+  n.g.gain.cancelScheduledValues(t); n.g.gain.setValueAtTime(n.g.gain.value, t); n.g.gain.linearRampToValueAtTime(0.0001, t + 0.15);
+  n.s.stop(t + 0.2); n.lfo.stop(t + 0.2);
+}
+
+/* ------------------------------------------------------------- controls */
+const bins = TOPPINGS.map((t, i) => ({ def: t, x: 72 + i * 92, y: 594, w: 80, h: 62 }));
+const bottles = SYRUPS.map((s, i) => ({ def: s, x: 606 + i * 68, y: 500, w: 44, h: 116 }));
+const spoonHome = { x: 706, y: 604 };
+const stack = { x: 900, y: 596 };
+
+const SKIN = '#bd7f4c', SKIN_SH = '#966035', HAIR = '#2b1d16', SHIRT = '#e3a93e', SHIRT_SH = '#c08c2b';
+const kid = {
+  x: 80, hy: 350,
+  blinkT: 90, blink: 0,
+  exc: 0, bob: 0, sway: 0,
+  mouth: 0, brow: 0,
+  glow: null, glowT: 0,
+  eatArm: 0, chew: 0,
+  wave: 0
+};
+let snowCount = 0, countTick = 0;
+let serveState = 0, serveT = 0, bowlDX = 0, biteT = 0;
+const hearts = [];
+
+let held = null;          // {type:'bottle'|'bin'|'spoon', ref}
+let ptr = { x: 0, y: 0, down: false };
+let cranking = false, crankAngle = 0, crankSpeed = 0;
+let ice = 1, reload = 0;
+let hintStage = 0, hintT = 1;
+let resetAnim = 0;
+let scoopCool = 0, dropCool = 0;
+
+function pt(e) {
+  const r = cv.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H };
+}
+function inRect(p, x, y, w, h) { return p.x > x - w / 2 && p.x < x + w / 2 && p.y > y - h && p.y < y; }
+function overMachine(p) {
+  if (p.x > 434 && p.x < 520 && p.y > 140 && p.y < 258) return true;   // crank
+  return p.x > 144 && p.x < 432 && p.y > 145 && p.y < 260;             // head
+}
+
+cv.addEventListener('pointerdown', e => {
+  cv.setPointerCapture(e.pointerId);
+  ac();
+  const p = pt(e); ptr = { x: p.x, y: p.y, down: true };
+  if (resetAnim > 0 || serveState > 0) return;
+
+  if (p.x > 16 && p.x < 148 && p.y > 292 && p.y < 552) {   // the kid
+    if (snowCount > 1200) { serveState = 1; serveT = 0; held = null; cranking = false; pourOff(); shaveOff(); if (hintStage === 3) { hintStage = 4; hintT = 1; } }
+    else { kid.wave = 1; kid.exc = Math.min(1, kid.exc + 0.5); thud(420, 0.05); }
+    return;
+  }
+
+  if (inRect(p, stack.x, stack.y + 34, 96, 74)) { newBowl(); return; }
+  if (inRect(p, spoonHome.x, spoonHome.y + 20, 96, 66)) { held = { type: 'spoon' }; return; }
+  for (const b of bins) if (inRect(p, b.x, b.y + b.h, b.w + 14, b.h + 20)) { held = { type: 'bin', ref: b }; return; }
+  for (const b of bottles) if (inRect(p, b.x, b.y, b.w + 16, b.h + 12)) { held = { type: 'bottle', ref: b }; return; }
+  if (overMachine(p)) { cranking = true; if (hintStage === 0) { hintStage = 1; hintT = 1; } return; }
+});
+function release() {
+  ptr.down = false;
+  if (held && held.type === 'bottle' && hintStage === 1) { hintStage = 2; hintT = 1; }
+  if (held && held.type === 'bin' && hintStage === 2) { hintStage = 3; hintT = 1; }
+  held = null; cranking = false; pourOff();
+}
+cv.addEventListener('pointerup', release);
+cv.addEventListener('pointercancel', release);
+cv.addEventListener('pointerleave', release);
+cv.addEventListener('pointermove', e => { const p = pt(e); ptr.x = p.x; ptr.y = p.y; });
+
+function newBowl() {
+  filled.fill(0); syr.fill(0); active = []; inAct.fill(0);
+  bits.length = 0; drips.length = 0; spillFx.length = 0;
+  spillL = 0; spillR = 0; resetAnim = 1;
+  clink();
+}
+
+/* ------------------------------------------------------------ seed bowl */
+function seed() {
+  for (let c = 0; c < COLS; c++) {
+    const dx = (colX[c] - CX) / 96;
+    if (Math.abs(dx) > 1) continue;
+    const dome = Math.sqrt(Math.max(0, 1 - dx * dx));
+    const top = RIM_Y - 4 - dome * 92;
+    for (let r = 0; r < ROWS; r++) {
+      if (rowY[r] < top) continue;
+      if (cls(c, r) !== INSIDE) continue;
+      const j = r * COLS + c;
+      const v = 242 + ((Math.random() * 13) | 0);
+      filled[j] = 1; cr[j] = v; cg[j] = Math.min(255, v + 4); cb[j] = 255;
+    }
+  }
+  const pours = [[0, 16, 44, 0.34, 16], [3, 52, 78, 0.30, 14], [4, 40, 56, 0.26, 10]];
+  for (const [si, lo, hi, st, dp] of pours) {
+    for (let k = 0; k < 26; k++) {
+      const c = lo + ((Math.random() * (hi - lo)) | 0);
+      let r = 0; while (r < ROWS && !filled[r * COLS + c]) r++;
+      if (r < ROWS) dye(c, r + ((Math.random() * 5) | 0), SYRUPS[si].col, st, dp);
+    }
+  }
+  const seeds = [0, 1, 4, 0, 5, 2, 3, 1, 0, 4];
+  for (let k = 0; k < seeds.length; k++) {
+    const def = TOPPINGS[seeds[k]];
+    addBit(def, CX - 74 + Math.random() * 148, RIM_Y - 96 - Math.random() * 26, 0, 0);
+  }
+  for (let k = 0; k < 90; k++) stepBits();
+}
+seed();
+for (let i = 0; i < N; i++) if (filled[i]) snowCount++;
+
+/* ---------------------------------------------------------------- update */
+let spawnPhase = 0;
+const sparkles = [];
+const mist = [];
+
+function update() {
+  if (resetAnim > 0) { resetAnim = Math.max(0, resetAnim - 0.035); }
+
+  // crank
+  const wantCrank = cranking && ptr.down && resetAnim === 0 && serveState === 0;
+  crankSpeed += ((wantCrank && reload <= 0 ? 0.20 : 0) - crankSpeed) * 0.11;
+  crankAngle += crankSpeed;
+  if (crankSpeed > 0.03) shaveOn(); else shaveOff();
+
+  if (wantCrank && reload <= 0) {
+    ice -= 0.00085;
+    if (ice <= 0) { ice = 0; reload = 1; thud(150, 0.22); }
+    spawnPhase += 0.055;
+    const cxs = CX + Math.sin(spawnPhase) * 15 + Math.sin(spawnPhase * 2.3) * 5;
+    const n = Math.round(6 * (crankSpeed / 0.2));
+    for (let k = 0; k < n; k++) {
+      const x = cxs + (Math.random() - 0.5) * 16;
+      addSnow(Math.round((x - GX0 - CELL / 2) / CELL), 16 + ((Math.random() * 4) | 0));
+    }
+    if (!REDUCED && mist.length < 40 && Math.random() < 0.35)
+      mist.push({ x: cxs + (Math.random() - 0.5) * 40, y: 258 + Math.random() * 8, vx: (Math.random() - 0.5) * 0.3, vy: 0.35 + Math.random() * 0.3, life: 1, r: 6 + Math.random() * 10 });
+  }
+  if (reload > 0) { reload -= 0.014; if (reload <= 0) { reload = 0; ice = 1; clink(); } }
+
+  for (let s = 0; s < 4; s++) stepSnow();
+
+  // held tools
+  let pouring = false;
+  if (held && ptr.down && resetAnim === 0 && serveState === 0) {
+    if (held.type === 'bottle') {
+      const over = ptr.x > CX - 150 && ptr.x < CX + 150 && ptr.y > 170 && ptr.y < RIM_Y + 30;
+      if (over) {
+        pouring = true;
+        const d = held.ref.def;
+        const rate = d.thick ? 0.55 : 1;
+        if (Math.random() < rate) {
+          drips.push({ x: ptr.x + (Math.random() - 0.5) * 5, y: ptr.y + 34, vy: 1.6, col: d.col, thick: !!d.thick });
+          kid.exc = Math.min(1, kid.exc + 0.05);
+          kid.glow = d.col; kid.glowT = 1;
+        }
+      }
+    } else if (held.type === 'bin') {
+      const over = ptr.x > CX - 130 && ptr.x < CX + 130 && ptr.y > 180 && ptr.y < RIM_Y + 20;
+      if (over && dropCool <= 0) {
+        dropCool = 7;
+        addBit(held.ref.def, ptr.x + (Math.random() - 0.5) * 22, ptr.y + 22, (Math.random() - 0.5) * 0.6, 0.6);
+        thud(220 + Math.random() * 90, 0.05);
+        kid.exc = Math.min(1, kid.exc + 0.22); kid.bob = 4;
+      }
+    } else if (held.type === 'spoon') {
+      const sx = ptr.x, sy = ptr.y + 16;
+      let ate = 0;
+      const c0 = Math.round((sx - GX0 - CELL / 2) / CELL), r0 = Math.round((sy - GY0 - CELL / 2) / CELL);
+      const rad = 6;
+      for (let dr = -rad; dr <= rad; dr++) for (let dc = -rad; dc <= rad; dc++) {
+        if (dc * dc + dr * dr > rad * rad) continue;
+        const c = c0 + dc, r = r0 + dr;
+        if (c < 0 || c >= COLS || r < 0 || r >= ROWS) continue;
+        const j = r * COLS + c;
+        if (filled[j]) { filled[j] = 0; syr[j] = 0; ate++; wake(c, r); }
+      }
+      for (let i = bits.length - 1; i >= 0; i--) {
+        const b = bits[i];
+        if ((b.x - sx) ** 2 + (b.y - sy) ** 2 < 260) { bits.splice(i, 1); ate += 4; }
+      }
+      if (ate > 0 && scoopCool <= 0) { scoopCool = 9; burst(2400, 0.9, 0.16, 0.13); kid.exc = Math.max(kid.exc, 0.3); }
+    }
+  }
+  if (pouring) pourOn(); else pourOff();
+  if (dropCool > 0) dropCool--;
+  if (scoopCool > 0) scoopCool--;
+
+  // drips
+  for (let i = drips.length - 1; i >= 0; i--) {
+    const d = drips[i];
+    d.vy += 0.28; d.y += d.vy;
+    const c = Math.round((d.x - GX0 - CELL / 2) / CELL);
+    const r = Math.round((d.y - GY0 - CELL / 2) / CELL);
+    let done = false;
+    if (c >= 0 && c < COLS && r >= 0 && r < ROWS && filled[r * COLS + c]) {
+      dye(c, r, d.col, d.thick ? 0.9 : 0.72, d.thick ? 9 : 15);
+      done = true;
+    } else if (d.y > BASE_Y - 4) {
+      done = true;
+      if (c >= 0 && c < COLS) dye(c, ROWS - 4, d.col, 0.9, 5);
+    }
+    if (done) drips.splice(i, 1);
+  }
+
+  stepBits();
+
+  // fx
+  for (let i = spillFx.length - 1; i >= 0; i--) {
+    const s = spillFx[i]; s.vy += 0.3; s.x += s.vx; s.y += s.vy; s.life -= 0.03;
+    if (s.y > COUNTER_Y + 8 || s.life <= 0) spillFx.splice(i, 1);
+  }
+  for (let i = mist.length - 1; i >= 0; i--) {
+    const m = mist[i]; m.x += m.vx; m.y += m.vy; m.vy *= 0.985; m.life -= 0.02; m.r += 0.25;
+    if (m.life <= 0) mist.splice(i, 1);
+  }
+
+  // column tops + sparkles
+  for (let c = 0; c < COLS; c++) {
+    let r = 0; while (r < ROWS && !filled[r * COLS + c]) r++;
+    colTop[c] = r;
+  }
+  if (!REDUCED) {
+    for (let i = sparkles.length - 1; i >= 0; i--) { sparkles[i].t -= 0.026; if (sparkles[i].t <= 0) sparkles.splice(i, 1); }
+    if (sparkles.length < 34 && Math.random() < 0.6) {
+      const c = (Math.random() * COLS) | 0;
+      if (colTop[c] < ROWS) sparkles.push({ x: colX[c], y: rowY[colTop[c]] + Math.random() * 3, t: 1, s: 0.7 + Math.random() * 1.1 });
+    }
+  }
+
+  // snow volume (used for "is this worth serving")
+  if ((countTick++ % 6) === 0) { let n = 0; for (let i = 0; i < N; i++) if (filled[i]) n++; snowCount = n; }
+
+  updateServe();
+  updateKid();
+
+  if (hintT > 0) hintT -= 0.0016;
+}
+
+function clearSnow() {
+  filled.fill(0); syr.fill(0); inAct.fill(0); active = []; snowCount = 0;
+}
+
+function takeBite() {
+  const cands = [];
+  let best = 0;
+  for (let c = 2; c < COLS - 2; c++) if (colTop[c] < ROWS) best = Math.max(best, ROWS - colTop[c]);
+  if (best < 2) return false;
+  for (let c = 2; c < COLS - 2; c++) if (colTop[c] < ROWS && (ROWS - colTop[c]) > best * 0.5) cands.push(c);
+  if (!cands.length) return false;
+  const bc = cands[(Math.random() * cands.length) | 0];
+  const half = 6;
+  let top = ROWS;
+  for (let c = bc - half; c <= bc + half; c++)
+    if (c >= 0 && c < COLS) top = Math.min(top, colTop[c]);
+  const deep = Math.min(ROWS, top + 38);
+  let ate = 0;
+  for (let c = bc - half; c <= bc + half; c++) {
+    if (c < 0 || c >= COLS) continue;
+    for (let r = top; r < deep; r++) {
+      const j = r * COLS + c;
+      if (filled[j]) { filled[j] = 0; syr[j] = 0; ate++; wake(c, r); }
+    }
+  }
+  snowCount = Math.max(0, snowCount - ate);
+  const bx = colX[bc];
+  for (let i = bits.length - 1; i >= 0; i--)
+    if (Math.abs(bits[i].x - bx) < half * CELL + 10) bits.splice(i, 1);
+  return ate > 0;
+}
+
+function finishBowl() {
+  clearSnow();
+  bits.length = 0;
+  burst(1700, 0.7, 0.12, 0.22);
+  serveState = 3; serveT = 0; kid.eatArm = 0;
+}
+
+function updateServe() {
+  if (serveState === 0) return;
+  serveT += 1 / 60;
+  const target = 250 - CX;
+  if (serveState === 1) {
+    const t = Math.min(1, serveT / 1.0);
+    const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    bowlDX = target * e;
+    if (t >= 1) { serveState = 2; serveT = 0; biteT = 14; kid.exc = 1; }
+  } else if (serveState === 2) {
+    kid.eatArm = 0.5 - Math.cos(biteT / 20 * Math.PI * 2) * 0.5;
+    if (--biteT <= 0) {
+      biteT = 22;
+      if (takeBite()) { burst(2100, 0.8, 0.14, 0.16); kid.mouth = 1; kid.chew = 1; }
+      else { finishBowl(); }
+    }
+    if (snowCount < 150 || serveT > 11) finishBowl();
+  } else if (serveState === 3) {
+    if (serveT < 0.05) { clink(); for (let i = 0; i < 7; i++) hearts.push({ x: kid.x + (Math.random() - 0.5) * 60, y: 320, vy: -0.7 - Math.random() * 0.5, t: 1, s: 6 + Math.random() * 5 }); }
+    kid.exc = 1;
+    if (serveT > 1.5) { serveState = 4; serveT = 0; }
+  } else if (serveState === 4) {
+    const t = Math.min(1, serveT / 0.8);
+    bowlDX = target * (1 - (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2));
+    if (t >= 1) { bowlDX = 0; serveState = 0; newBowl(); snowCount = 0; }
+  }
+}
+
+function updateKid() {
+  const k = kid;
+  if (--k.blinkT <= 0) { k.blink = 9; k.blinkT = 80 + (Math.random() * 170 | 0); }
+  if (k.blink > 0) k.blink--;
+  const busy = (crankSpeed > 0.04 ? 1 : 0);
+  k.exc += ((busy ? 0.55 : 0) - k.exc) * 0.035;
+  k.exc = Math.max(0, Math.min(1, k.exc));
+  k.sway += ((serveState >= 1 && serveState <= 3 ? 14 : 0) + Math.sin(Date.now() / 1400) * 2.2 - k.sway) * 0.06;
+  k.bob += ((serveState === 2 ? Math.sin(Date.now() / 130) * 2 : 0) - k.bob) * 0.12;
+  k.brow += (k.exc - k.brow) * 0.1;
+  k.mouth += ((serveState === 2 ? k.mouth : k.exc * 0.55) - k.mouth) * 0.14;
+  if (k.chew > 0) { k.chew -= 0.05; k.mouth = 0.35 + Math.sin(k.chew * 22) * 0.3; }
+  if (k.glowT > 0) k.glowT -= 0.012;
+  if (k.wave > 0) k.wave -= 0.022;
+  for (let i = hearts.length - 1; i >= 0; i--) {
+    const h = hearts[i]; h.y += h.vy; h.vy *= 0.995; h.t -= 0.014;
+    if (h.t <= 0) hearts.splice(i, 1);
+  }
+}
+
+/* ---------------------------------------------------------------- render */
+const off = document.createElement('canvas');
+off.width = COLS; off.height = ROWS;
+const octx = off.getContext('2d');
+const img = octx.createImageData(COLS, ROWS);
+
+function drawSnow() {
+  const d = img.data;
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const j = r * COLS + c, p = j * 4;
+      if (!filled[j]) { d[p + 3] = 0; continue; }
+      const depth = r - colTop[c];
+      let sh = 1 - Math.min(depth * 0.006, 0.17);
+      if (depth < 3) sh *= 1.05;
+      const side = 1 - Math.abs(colX[c] - CX) / 210 * 0.10;
+      sh *= side;
+      d[p] = Math.min(255, cr[j] * sh);
+      d[p + 1] = Math.min(255, cg[j] * sh * 1.002);
+      d[p + 2] = Math.min(255, cb[j] * sh * 1.02);
+      d[p + 3] = 255;
+    }
+  }
+  octx.putImageData(img, 0, 0);
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(off, GX0, GY0, COLS * CELL, ROWS * CELL);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.globalAlpha = 0.55;
+  ctx.drawImage(off, GX0 - 1.5, GY0 - 1.5, COLS * CELL + 3, ROWS * CELL + 3);
+  ctx.restore();
+
+  // gloss where syrup pools on the surface
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let c = 0; c < COLS; c += 1) {
+    const r = colTop[c];
+    if (r >= ROWS) continue;
+    const j = r * COLS + c;
+    if (syr[j] < 60) continue;
+    ctx.globalAlpha = Math.min(0.30, syr[j] / 255 * 0.30);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(colX[c] - 1.5, rowY[r] - 1.5, 3, 2.5);
+  }
+  ctx.restore();
+
+  if (!REDUCED) {
+    ctx.save();
+    for (const s of sparkles) {
+      ctx.globalAlpha = Math.sin(s.t * Math.PI) * 0.85;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.s, 0, 7); ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function drawBackground() {
+  // upper wall
+  const g = ctx.createLinearGradient(0, 0, 0, COUNTER_Y);
+  g.addColorStop(0, C.wallTop); g.addColorStop(0.42, C.tile); g.addColorStop(1, C.tileLo);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, COUNTER_Y);
+  // tiles
+  ctx.save();
+  ctx.strokeStyle = 'rgba(38,72,66,.35)'; ctx.lineWidth = 2;
+  for (let y = 156; y < COUNTER_Y; y += 44) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  for (let y = 156, row = 0; y < COUNTER_Y; y += 44, row++) {
+    const off2 = row % 2 ? 22 : 0;
+    for (let x = off2; x <= W; x += 44) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, Math.min(COUNTER_Y, y + 44)); ctx.stroke(); }
+  }
+  ctx.fillStyle = 'rgba(255,255,255,.055)';
+  for (let y = 156, row = 0; y < COUNTER_Y; y += 44, row++) {
+    const off2 = row % 2 ? 22 : 0;
+    for (let x = off2; x <= W; x += 44) ctx.fillRect(x + 2, y + 2, 18, 8);
+  }
+  ctx.restore();
+  // vignette
+  const vg = ctx.createRadialGradient(500, 300, 120, 500, 340, 760);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(6,20,24,.5)');
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, W, COUNTER_Y);
+}
+
+function drawSign() {
+  ctx.save();
+  // hanging rods
+  ctx.strokeStyle = 'rgba(20,40,40,.5)'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(300, 0); ctx.lineTo(300, 34); ctx.moveTo(700, 0); ctx.lineTo(700, 34); ctx.stroke();
+  // board
+  ctx.fillStyle = 'rgba(0,0,0,.22)'; roundRect(272, 40, 456, 82, 10); ctx.fill();
+  const g = ctx.createLinearGradient(0, 30, 0, 118);
+  g.addColorStop(0, '#e6503b'); g.addColorStop(1, '#b8301f');
+  ctx.fillStyle = g; roundRect(268, 30, 456, 84, 10); ctx.fill();
+  ctx.strokeStyle = C.cream; ctx.lineWidth = 3; roundRect(276, 38, 440, 68, 7); ctx.stroke();
+  ctx.fillStyle = C.cream;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = "34px 'Alfa Slab One', Georgia, serif";
+  ctx.fillText('ICE KACANG', 496, 71);
+  ctx.font = "800 13px 'Nunito', sans-serif";
+  ctx.fillStyle = 'rgba(247,236,216,.85)';
+  ctx.fillText('\u51b0 \u00b7 SHAVED FRESH \u00b7 \u51b0', 496, 96);
+  ctx.restore();
+}
+
+function drawCounter() {
+  const g = ctx.createLinearGradient(0, COUNTER_Y, 0, COUNTER_FRONT);
+  g.addColorStop(0, C.steelHi); g.addColorStop(0.35, C.steel); g.addColorStop(1, C.steelLo);
+  ctx.fillStyle = g; ctx.fillRect(0, COUNTER_Y, W, COUNTER_FRONT - COUNTER_Y);
+  ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.fillRect(0, COUNTER_Y, W, 3);
+  ctx.save(); ctx.globalAlpha = 0.13; ctx.strokeStyle = '#4a5558'; ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 7) { ctx.beginPath(); ctx.moveTo(x, COUNTER_Y + 4); ctx.lineTo(x - 12, COUNTER_FRONT); ctx.stroke(); }
+  ctx.restore();
+  ctx.fillStyle = C.steelDk; ctx.fillRect(0, COUNTER_FRONT, W, 10);
+  const t = ctx.createLinearGradient(0, COUNTER_FRONT + 10, 0, H);
+  t.addColorStop(0, C.teakHi); t.addColorStop(1, C.teakLo);
+  ctx.fillStyle = t; ctx.fillRect(0, COUNTER_FRONT + 10, W, H - COUNTER_FRONT - 10);
+  ctx.save(); ctx.globalAlpha = 0.16; ctx.strokeStyle = '#3a2113'; ctx.lineWidth = 2;
+  for (let x = 26; x < W; x += 96) { ctx.beginPath(); ctx.moveTo(x, COUNTER_FRONT + 10); ctx.lineTo(x, H); ctx.stroke(); }
+  ctx.restore();
+}
+
+function drawSpill() {
+  ctx.save();
+  ctx.fillStyle = 'rgba(238,247,255,.92)';
+  const draw = (cx0, amt) => {
+    if (amt < 0.02) return;
+    const w = 26 + amt * 62, h = 5 + amt * 13;
+    ctx.beginPath(); ctx.ellipse(cx0, COUNTER_Y + 8, w, h, 0, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = 'rgba(169,198,222,.5)';
+    ctx.beginPath(); ctx.ellipse(cx0, COUNTER_Y + 9, w, h * 0.35, 0, 0, Math.PI); ctx.fill();
+    ctx.fillStyle = 'rgba(238,247,255,.92)';
+  };
+  draw(CX - 118, spillL); draw(CX + 118, spillR);
+  ctx.restore();
+  for (const s of spillFx) {
+    ctx.globalAlpha = s.life; ctx.fillStyle = '#f4faff';
+    ctx.fillRect(s.x, s.y, 3, 3);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function bowlPath(inset) {
+  ctx.beginPath();
+  ctx.moveTo(CX - RIM_HW + inset, RIM_Y);
+  for (let y = RIM_Y; y <= BASE_Y; y += 6) ctx.lineTo(CX - hwAt(y) + inset, y);
+  ctx.lineTo(CX - BASE_HW + inset, BASE_Y);
+  ctx.lineTo(CX + BASE_HW - inset, BASE_Y);
+  for (let y = BASE_Y; y >= RIM_Y; y -= 6) ctx.lineTo(CX + hwAt(y) - inset, y);
+  ctx.closePath();
+}
+
+function drawBowlBack() {
+  ctx.save();
+  ctx.translate(resetAnim > 0 ? (1 - resetAnim) * 0 : 0, 0);
+  // shadow on counter
+  ctx.fillStyle = 'rgba(30,50,55,.3)';
+  ctx.beginPath(); ctx.ellipse(CX, BASE_Y + 6, 92, 12, 0, 0, 7); ctx.fill();
+  // glass body (back)
+  bowlPath(0);
+  const g = ctx.createLinearGradient(CX - RIM_HW, 0, CX + RIM_HW, 0);
+  g.addColorStop(0, 'rgba(198,224,236,.5)');
+  g.addColorStop(0.5, 'rgba(232,245,250,.2)');
+  g.addColorStop(1, 'rgba(198,224,236,.5)');
+  ctx.fillStyle = g; ctx.fill();
+  ctx.restore();
+}
+
+function drawBowlFront() {
+  ctx.save();
+  ctx.beginPath();
+  bowlPath(0);
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2.5; ctx.stroke();
+  // inner shading
+  const g = ctx.createLinearGradient(CX - RIM_HW, 0, CX + RIM_HW, 0);
+  g.addColorStop(0, 'rgba(120,165,190,.24)');
+  g.addColorStop(0.18, 'rgba(255,255,255,.05)');
+  g.addColorStop(0.5, 'rgba(255,255,255,0)');
+  g.addColorStop(0.84, 'rgba(255,255,255,.06)');
+  g.addColorStop(1, 'rgba(120,165,190,.24)');
+  bowlPath(0); ctx.fillStyle = g; ctx.fill();
+  // rim ellipse
+  ctx.beginPath(); ctx.ellipse(CX, RIM_Y, RIM_HW, 13, 0, 0, 7);
+  ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = 3.5; ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(CX, RIM_Y, RIM_HW - 4, 10, 0, 0.15, Math.PI - 0.15);
+  ctx.strokeStyle = 'rgba(150,190,215,.55)'; ctx.lineWidth = 2; ctx.stroke();
+  // highlight streak
+  ctx.globalAlpha = 0.5; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(CX - 74, RIM_Y + 16); ctx.lineTo(CX - 56, BASE_Y - 14); ctx.stroke();
+  ctx.restore();
+}
+
+function drawBit(b, ghost) {
+  const d = b.def;
+  ctx.save();
+  ctx.translate(b.x, b.y); ctx.rotate(b.rot);
+  if (ghost) ctx.globalAlpha = 0.42;
+  const r = b.r;
+  ctx.fillStyle = d.col;
+  if (d.kind === 'bean') {
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 1.25, r * 0.82, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = d.col2; ctx.beginPath(); ctx.ellipse(-r * .3, -r * .28, r * .5, r * .22, -0.3, 0, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-r * .8, r * .25); ctx.lineTo(r * .8, r * .1); ctx.stroke();
+  } else if (d.kind === 'corn') {
+    roundRect(-r, -r * .9, r * 2, r * 1.8, r * .7); ctx.fill();
+    ctx.fillStyle = d.col2; ctx.beginPath(); ctx.ellipse(-r * .25, -r * .3, r * .45, r * .35, 0, 0, 7); ctx.fill();
+  } else if (d.kind === 'attap') {
+    ctx.globalAlpha *= 0.92;
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 1.15, r * 0.8, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.beginPath(); ctx.ellipse(-r * .3, -r * .3, r * .4, r * .26, 0, 0, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(180,175,150,.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(0, 0, r * 1.15, r * 0.8, 0, 0, 7); ctx.stroke();
+  } else if (d.kind === 'jelly') {
+    roundRect(-r, -r, r * 2, r * 2, 1.6); ctx.fill();
+    ctx.fillStyle = d.col2; ctx.globalAlpha *= .8;
+    roundRect(-r * .8, -r * .8, r * .8, r * .5, 1); ctx.fill();
+  } else if (d.kind === 'cendol') {
+    roundRect(-r * .55, -r * 1.5, r * 1.1, r * 3, r * .55); ctx.fill();
+    ctx.fillStyle = d.col2; roundRect(-r * .2, -r * 1.2, r * .35, r * 1.6, r * .2); ctx.fill();
+  } else {
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 1.25, r * 0.85, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = d.col2; ctx.beginPath(); ctx.ellipse(-r * .25, -r * .3, r * .5, r * .3, 0, 0, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(120,80,40,.55)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, -r * .7); ctx.lineTo(0, r * .7); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawMachine() {
+  ctx.save();
+  // shadow
+  ctx.fillStyle = 'rgba(20,40,45,.28)';
+  ctx.beginPath(); ctx.ellipse(182, BASE_Y + 4, 62, 11, 0, 0, 7); ctx.fill();
+
+  // post
+  let g = ctx.createLinearGradient(150, 0, 216, 0);
+  g.addColorStop(0, C.steelLo); g.addColorStop(0.32, C.steelHi); g.addColorStop(0.6, C.steel); g.addColorStop(1, C.steelDk);
+  ctx.fillStyle = g; roundRect(150, 168, 66, 336, 8); ctx.fill();
+  // foot
+  ctx.fillStyle = C.steelDk; roundRect(132, 486, 102, 20, 7); ctx.fill();
+  ctx.fillStyle = C.steelLo; roundRect(132, 486, 102, 8, 5); ctx.fill();
+
+  // head
+  g = ctx.createLinearGradient(0, 148, 0, 258);
+  g.addColorStop(0, C.steelHi); g.addColorStop(0.45, C.steel); g.addColorStop(1, C.steelLo);
+  ctx.fillStyle = g; roundRect(144, 148, 288, 110, 16); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2; roundRect(148, 152, 280, 102, 14); ctx.stroke();
+
+  // ice window
+  ctx.save();
+  roundRect(178, 164, 156, 74, 8); ctx.clip();
+  ctx.fillStyle = '#8fa9b6'; ctx.fillRect(178, 164, 156, 74);
+  const ih = 66 * (reload > 0 ? Math.max(0, 1 - reload) : ice);
+  const iy = 234 - ih;
+  const ig = ctx.createLinearGradient(0, iy, 0, 234);
+  ig.addColorStop(0, 'rgba(255,255,255,.95)'); ig.addColorStop(0.5, 'rgba(226,244,255,.85)'); ig.addColorStop(1, 'rgba(178,212,232,.9)');
+  ctx.fillStyle = ig; roundRect(186, iy, 140, ih + 2, 5); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = 1.5;
+  for (let k = 0; k < 4; k++) {
+    ctx.beginPath(); ctx.moveTo(200 + k * 34, iy + 4); ctx.lineTo(192 + k * 34, 232); ctx.stroke();
+  }
+  ctx.restore();
+  ctx.strokeStyle = C.steelDk; ctx.lineWidth = 4; roundRect(178, 164, 156, 74, 8); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1.5; roundRect(180, 166, 152, 70, 7); ctx.stroke();
+
+  // name plate
+  ctx.fillStyle = C.enamel; roundRect(350, 176, 68, 30, 6); ctx.fill();
+  ctx.fillStyle = C.cream; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = "13px 'Alfa Slab One', Georgia, serif";
+  ctx.fillText('KACANG', 384, 192);
+  // blade indicator
+  ctx.fillStyle = C.steelDk; ctx.beginPath(); ctx.arc(384, 228, 15, 0, 7); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(384, 228, 15, 0, 7); ctx.stroke();
+  ctx.save();
+  ctx.translate(384, 228); ctx.rotate(crankAngle * 2.4);
+  ctx.strokeStyle = crankSpeed > 0.03 ? '#ffd35e' : 'rgba(200,214,218,.85)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(k * 2.09) * 11, Math.sin(k * 2.09) * 11); ctx.stroke(); }
+  ctx.restore();
+
+  // nozzle
+  ctx.fillStyle = C.steelDk; roundRect(300, 250, 70, 16, 5); ctx.fill();
+  ctx.fillStyle = C.steelLo; roundRect(304, 250, 62, 7, 4); ctx.fill();
+
+  // crank arm + wheel
+  ctx.fillStyle = C.steelDk; roundRect(422, 190, 42, 14, 6); ctx.fill();
+  const cxk = 476, cyk = 197;
+  ctx.fillStyle = 'rgba(20,40,45,.2)'; ctx.beginPath(); ctx.arc(cxk + 3, cyk + 4, 34, 0, 7); ctx.fill();
+  g = ctx.createLinearGradient(cxk - 34, cyk - 34, cxk + 34, cyk + 34);
+  g.addColorStop(0, C.steelHi); g.addColorStop(1, C.steelLo);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cxk, cyk, 34, 0, 7); ctx.fill();
+  ctx.strokeStyle = C.steelDk; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cxk, cyk, 34, 0, 7); ctx.stroke();
+  ctx.save();
+  ctx.translate(cxk, cyk); ctx.rotate(crankAngle);
+  ctx.strokeStyle = C.steelDk; ctx.lineWidth = 6; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(24, 0); ctx.stroke();
+  ctx.fillStyle = C.enamel; ctx.beginPath(); ctx.arc(24, 0, 11, 0, 7); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.beginPath(); ctx.arc(21, -3, 4, 0, 7); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = C.steelDk; ctx.beginPath(); ctx.arc(cxk, cyk, 7, 0, 7); ctx.fill();
+
+  // cranking hint glow
+  if (crankSpeed < 0.02 && hintStage === 0) {
+    ctx.globalAlpha = 0.35 + Math.sin(Date.now() / 320) * 0.22;
+    ctx.strokeStyle = '#ffd35e'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(cxk, cyk, 41, 0, 7); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+}
+
+function drawBottle(b, x, y, ang, held2) {
+  const d = b.def, w = b.w, h = b.h;
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(ang);
+  if (!held2) { ctx.fillStyle = 'rgba(30,50,55,.25)'; ctx.beginPath(); ctx.ellipse(0, 2, w * .62, 6, 0, 0, 7); ctx.fill(); }
+  // glass
+  ctx.beginPath();
+  ctx.moveTo(-w / 2, 0); ctx.lineTo(-w / 2, -h * .62);
+  ctx.quadraticCurveTo(-w / 2, -h * .8, -w * .18, -h * .84);
+  ctx.lineTo(-w * .18, -h);
+  ctx.lineTo(w * .18, -h);
+  ctx.lineTo(w * .18, -h * .84);
+  ctx.quadraticCurveTo(w / 2, -h * .8, w / 2, -h * .62);
+  ctx.lineTo(w / 2, 0); ctx.closePath();
+  ctx.save(); ctx.clip();
+  ctx.fillStyle = 'rgba(255,255,255,.20)'; ctx.fillRect(-w, -h - 4, w * 2, h + 8);
+  ctx.fillStyle = d.liq; ctx.globalAlpha = 0.92; ctx.fillRect(-w, -h * .78, w * 2, h);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = 'rgba(255,255,255,.28)'; ctx.fillRect(-w * .40, -h * .78, 5, h * .78);
+  // label
+  ctx.fillStyle = C.cream; roundRect(-w * .40, -h * .60, w * .80, h * .30, 3); ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(-w / 2, 0); ctx.lineTo(-w / 2, -h * .62);
+  ctx.quadraticCurveTo(-w / 2, -h * .8, -w * .18, -h * .84);
+  ctx.lineTo(-w * .18, -h); ctx.lineTo(w * .18, -h); ctx.lineTo(w * .18, -h * .84);
+  ctx.quadraticCurveTo(w / 2, -h * .8, w / 2, -h * .62);
+  ctx.lineTo(w / 2, 0); ctx.stroke();
+  // cap / spout
+  ctx.fillStyle = d.cap; roundRect(-w * .22, -h - 9, w * .44, 10, 3); ctx.fill();
+  // label text
+  ctx.fillStyle = C.ink; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = "900 11px 'Nunito', sans-serif";
+  ctx.fillText(d.name.toUpperCase(), 0, -h * .45);
+  ctx.restore();
+}
+
+function drawBin(b, ghost) {
+  const { x, y, w, h } = b;
+  ctx.save();
+  ctx.fillStyle = 'rgba(30,45,50,.25)';
+  ctx.beginPath(); ctx.ellipse(x, y + h + 4, w * .55, 7, 0, 0, 7); ctx.fill();
+  const g = ctx.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, C.steelHi); g.addColorStop(0.5, C.steel); g.addColorStop(1, C.steelLo);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(x - w / 2, y); ctx.lineTo(x - w / 2 + 8, y + h);
+  ctx.lineTo(x + w / 2 - 8, y + h); ctx.lineTo(x + w / 2, y); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1.5; ctx.stroke();
+  // contents
+  ctx.save();
+  ctx.beginPath(); ctx.ellipse(x, y + 3, w / 2 - 2, 10, 0, 0, 7); ctx.clip();
+  ctx.fillStyle = '#63737a'; ctx.fillRect(x - w, y - 12, w * 2, 30);
+  const fake = { def: b.def, x: 0, y: 0, r: b.def.r, rot: 0 };
+  for (let i = 0; i < 16; i++) {
+    fake.x = x - w / 2 + 8 + ((i * 37) % (w - 16));
+    fake.y = y + 1 + ((i * 13) % 9);
+    fake.rot = i * 1.7;
+    fake.r = b.def.r;
+    drawBit(fake, false);
+  }
+  ctx.restore();
+  ctx.beginPath(); ctx.ellipse(x, y + 3, w / 2 - 2, 10, 0, 0, 7);
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2.5; ctx.stroke();
+  // label
+  ctx.fillStyle = C.cream; roundRect(x - w / 2 + 9, y + h - 22, w - 18, 17, 4); ctx.fill();
+  ctx.fillStyle = C.ink; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = "900 10px 'Nunito', sans-serif";
+  ctx.fillText(b.def.name.toUpperCase(), x, y + h - 13);
+  ctx.restore();
+}
+
+function drawSpoon(x, y, ang) {
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(ang);
+  ctx.fillStyle = 'rgba(30,45,50,.22)';
+  ctx.beginPath(); ctx.ellipse(2, 26, 26, 6, 0, 0, 7); ctx.fill();
+  const g = ctx.createLinearGradient(-8, -30, 12, 30);
+  g.addColorStop(0, C.steelHi); g.addColorStop(0.5, C.steel); g.addColorStop(1, C.steelLo);
+  ctx.fillStyle = g;
+  roundRect(-5, -34, 10, 46, 5); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(0, 20, 16, 12, 0, 0, 7); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.ellipse(0, 20, 16, 12, 0, 0, 7); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.45)';
+  ctx.beginPath(); ctx.ellipse(-5, 17, 6, 4, -0.4, 0, 7); ctx.fill();
+  ctx.restore();
+}
+
+function drawStack() {
+  const { x, y } = stack;
+  ctx.save();
+  ctx.fillStyle = 'rgba(30,45,50,.25)';
+  ctx.beginPath(); ctx.ellipse(x, y + 58, 52, 9, 0, 0, 7); ctx.fill();
+  for (let i = 0; i < 3; i++) {
+    const yy = y + 46 - i * 15;
+    ctx.beginPath(); ctx.ellipse(x, yy, 46 - i * 2, 13, 0, 0, 7);
+    ctx.fillStyle = 'rgba(226,242,248,.5)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = 2.5; ctx.stroke();
+  }
+  ctx.fillStyle = C.cream; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = "900 12px 'Nunito', sans-serif";
+  ctx.fillStyle = C.enamel; roundRect(x - 48, y - 22, 96, 22, 6); ctx.fill();
+  ctx.fillStyle = C.cream; ctx.fillText('FRESH BOWL', x, y - 11);
+  ctx.restore();
+}
+
+function drawHeld() {
+  if (!held || !ptr.down) return;
+  if (held.type === 'bottle') {
+    const over = ptr.x > CX - 150 && ptr.x < CX + 150 && ptr.y > 170 && ptr.y < RIM_Y + 30;
+    drawBottle(held.ref, ptr.x, ptr.y + (over ? 6 : 30), over ? Math.PI * 0.86 : -0.15, true);
+  } else if (held.type === 'bin') {
+    // a scoop of the topping in hand
+    ctx.save();
+    ctx.translate(ptr.x, ptr.y);
+    ctx.rotate(0.35);
+    const g = ctx.createLinearGradient(-20, -20, 20, 20);
+    g.addColorStop(0, C.steelHi); g.addColorStop(1, C.steelLo);
+    ctx.fillStyle = g;
+    roundRect(-4, -46, 8, 34, 4); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, 18, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 18, 0, 7); ctx.stroke();
+    ctx.save();
+    ctx.beginPath(); ctx.arc(0, -2, 15, Math.PI, 0); ctx.clip();
+    const fake = { def: held.ref.def, x: 0, y: 0, r: held.ref.def.r, rot: 0 };
+    for (let i = 0; i < 7; i++) { fake.x = -11 + i * 3.6; fake.y = -6 + (i % 3) * 4; fake.rot = i * 1.3; drawBit(fake, false); }
+    ctx.restore();
+    ctx.restore();
+  } else if (held.type === 'spoon') {
+    drawSpoon(ptr.x, ptr.y - 10, -0.25);
+  }
+}
+
+function drawKidBody() {
+  const k = kid, hx = k.x + k.sway, hy = k.hy + k.bob;
+  ctx.save();
+  // servable glow
+  if (snowCount > 1200 && serveState === 0) {
+    const pulse = 0.35 + Math.sin(Date.now() / 380) * 0.2;
+    const rg = ctx.createRadialGradient(hx, hy + 40, 20, hx, hy + 40, 130);
+    rg.addColorStop(0, 'rgba(255,211,94,' + (pulse * 0.5) + ')');
+    rg.addColorStop(1, 'rgba(255,211,94,0)');
+    ctx.fillStyle = rg; ctx.fillRect(hx - 140, hy - 110, 280, 280);
+  }
+  // torso
+  ctx.fillStyle = SHIRT;
+  ctx.beginPath();
+  ctx.moveTo(hx - 60, 512);
+  ctx.quadraticCurveTo(hx - 58, 412, hx - 28, 397);
+  ctx.lineTo(hx + 28, 397);
+  ctx.quadraticCurveTo(hx + 58, 412, hx + 60, 512);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = SHIRT_SH;
+  ctx.beginPath(); ctx.moveTo(hx + 24, 399); ctx.quadraticCurveTo(hx + 56, 414, hx + 60, 512);
+  ctx.lineTo(hx + 40, 512); ctx.quadraticCurveTo(hx + 38, 420, hx + 16, 400); ctx.closePath(); ctx.fill();
+  // collar
+  ctx.fillStyle = '#f6e6c0';
+  ctx.beginPath(); ctx.ellipse(hx, 400, 27, 11, 0, 0, 7); ctx.fill();
+  // neck
+  ctx.fillStyle = SKIN_SH;
+  roundRect(hx - 14, hy + 26, 28, 32, 9); ctx.fill();
+  // hair, back mass (gives the bob its silhouette)
+  ctx.fillStyle = HAIR;
+  ctx.beginPath(); ctx.ellipse(hx, hy + 8, 48, 54, 0, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(hx - 48, hy + 6);
+  ctx.quadraticCurveTo(hx - 52, hy + 46, hx - 34, hy + 58);
+  ctx.lineTo(hx - 20, hy + 50); ctx.quadraticCurveTo(hx - 40, hy + 40, hx - 38, hy + 4);
+  ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(hx + 48, hy + 6);
+  ctx.quadraticCurveTo(hx + 52, hy + 46, hx + 34, hy + 58);
+  ctx.lineTo(hx + 20, hy + 50); ctx.quadraticCurveTo(hx + 40, hy + 40, hx + 38, hy + 4);
+  ctx.closePath(); ctx.fill();
+  // head
+  ctx.fillStyle = SKIN;
+  ctx.beginPath(); ctx.ellipse(hx, hy, 43, 46, 0, 0, 7); ctx.fill();
+  // ears
+  ctx.beginPath(); ctx.ellipse(hx - 43, hy + 6, 7, 10, 0, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(hx + 43, hy + 6, 7, 10, 0, 0, 7); ctx.fill();
+  // fringe
+  ctx.fillStyle = HAIR;
+  ctx.beginPath();
+  ctx.ellipse(hx, hy - 2, 45, 46, 0, Math.PI, 0);
+  ctx.lineTo(hx + 45, hy + 4);
+  ctx.quadraticCurveTo(hx + 30, hy - 16, hx + 2, hy - 13);
+  ctx.quadraticCurveTo(hx - 28, hy - 11, hx - 45, hy + 10);
+  ctx.closePath(); ctx.fill();
+  // hair clip
+  ctx.save();
+  ctx.translate(hx - 31, hy - 20); ctx.rotate(-0.45);
+  ctx.fillStyle = '#ff6f91'; roundRect(-9, -3.5, 18, 7, 3.5); ctx.fill();
+  ctx.fillStyle = '#ffb3c6'; roundRect(-7, -2, 6, 2.5, 1.2); ctx.fill();
+  ctx.restore();
+
+  // face — eyes track the bowl
+  const tx = CX + bowlDX, ty = 400;
+  let dx = (tx - hx) / 240, dy = (ty - hy) / 260;
+  dx = Math.max(-1, Math.min(1, dx)); dy = Math.max(-1, Math.min(1, dy));
+  const open = k.blink > 0 ? 0.12 : 1;
+  const ey = hy + 3, exo = 17;
+  for (const sgn of [-1, 1]) {
+    const ex = hx + sgn * exo;
+    ctx.fillStyle = '#fdfaf4';
+    ctx.beginPath(); ctx.ellipse(ex, ey, 10, (10 + k.exc * 2.5) * open, 0, 0, 7); ctx.fill();
+    if (open > 0.5) {
+      ctx.fillStyle = '#241a14';
+      ctx.beginPath(); ctx.ellipse(ex + dx * 3.4, ey + dy * 3.2, 5.4, 5.8, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.9)';
+      ctx.beginPath(); ctx.arc(ex + dx * 3.4 - 2, ey + dy * 3.2 - 2.4, 1.9, 0, 7); ctx.fill();
+    } else {
+      ctx.strokeStyle = '#241a14'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(ex - 8, ey); ctx.lineTo(ex + 8, ey); ctx.stroke();
+    }
+    // brow
+    ctx.strokeStyle = HAIR; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(ex - 9, ey - 15 - k.brow * 5);
+    ctx.quadraticCurveTo(ex, ey - 19 - k.brow * 7, ex + 9, ey - 15 - k.brow * 4);
+    ctx.stroke();
+  }
+  // blush
+  ctx.fillStyle = 'rgba(216,110,96,.30)';
+  ctx.beginPath(); ctx.ellipse(hx - 29, hy + 18, 10, 6.5, 0, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(hx + 29, hy + 18, 10, 6.5, 0, 0, 7); ctx.fill();
+  // mouth
+  const mo = Math.max(0.06, k.mouth);
+  ctx.fillStyle = '#7d2f2c';
+  ctx.beginPath(); ctx.ellipse(hx, hy + 28, 9 + mo * 4, 3 + mo * 8, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = '#fdfaf4';
+  ctx.beginPath(); ctx.ellipse(hx, hy + 25 - mo * 3, 7 + mo * 2, 1.8, 0, 0, 7); ctx.fill();
+
+  // syrup colour reflecting on the face
+  if (k.glowT > 0 && k.glow) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = k.glowT * 0.22;
+    ctx.fillStyle = 'rgb(' + k.glow[0] + ',' + k.glow[1] + ',' + k.glow[2] + ')';
+    ctx.beginPath(); ctx.ellipse(hx + 12, hy + 6, 40, 42, 0, 0, 7); ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function forearm(x0, y0, x1, y1, cuff) {
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = SHIRT; ctx.lineWidth = 21;
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 + (x1 - x0) * cuff, y0 + (y1 - y0) * cuff); ctx.stroke();
+  ctx.strokeStyle = SKIN; ctx.lineWidth = 16;
+  ctx.beginPath(); ctx.moveTo(x0 + (x1 - x0) * (cuff - 0.06), y0 + (y1 - y0) * (cuff - 0.06)); ctx.lineTo(x1, y1); ctx.stroke();
+}
+
+function drawKidArms() {
+  const k = kid, hx = k.x + k.sway, hy = k.hy + k.bob;
+  ctx.save();
+  // left forearm — elbow tucked behind the counter edge
+  forearm(hx - 50, 444, hx - 26, 526, 0.55);
+  ctx.fillStyle = SKIN;
+  ctx.beginPath(); ctx.ellipse(hx - 21, 529, 12, 9.5, 0.4, 0, 7); ctx.fill();
+
+  if (serveState === 2) {
+    const t = k.eatArm;
+    const bx = CX + bowlDX;
+    const px = (bx - 66) + ((hx + 17) - (bx - 66)) * t;
+    const py = 402 + ((hy + 40) - 402) * t - Math.sin(t * Math.PI) * 30;
+    forearm(hx + 48, 442, px, py + 8, 0.5);
+    ctx.fillStyle = SKIN;
+    ctx.beginPath(); ctx.ellipse(px, py + 8, 12, 10, 0, 0, 7); ctx.fill();
+    ctx.save();
+    ctx.translate(px, py - 2); ctx.rotate(-0.55 + t * 1.0);
+    ctx.fillStyle = C.steel; roundRect(-3, -2, 6, 24, 3); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, -8, 10.5, 7.5, 0, 0, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.ellipse(0, -8, 10.5, 7.5, 0, 0, 7); ctx.stroke();
+    if (t < 0.84) { ctx.fillStyle = '#f6fbff'; ctx.beginPath(); ctx.ellipse(0, -10, 9, 6, 0, 0, 7); ctx.fill(); }
+    ctx.restore();
+  } else {
+    const wv = Math.sin(Date.now() / 90) * k.wave * 18;
+    const hxx = hx + 26 + wv, hyy = 526 - k.wave * 40;
+    forearm(hx + 50, 444, hxx, hyy, 0.55);
+    ctx.fillStyle = SKIN;
+    ctx.beginPath(); ctx.ellipse(hxx + 5, hyy + 2, 12, 9.5, -0.4, 0, 7); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawKidEmote() {
+  const k = kid, hx = k.x + k.sway, hy = k.hy + k.bob;
+  for (const h of hearts) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, h.t * 1.4);
+    ctx.fillStyle = '#ff5b7e';
+    ctx.translate(h.x, h.y); ctx.scale(h.s / 10, h.s / 10);
+    ctx.beginPath();
+    ctx.moveTo(0, 4); ctx.bezierCurveTo(-9, -3, -5, -10, 0, -5);
+    ctx.bezierCurveTo(5, -10, 9, -3, 0, 4); ctx.fill();
+    ctx.restore();
+  }
+  const ready = snowCount > 1200 && serveState === 0;
+  const wow = k.exc > 0.55 && serveState === 0 && !ready;
+  if (!ready && !wow) return;
+  const by = hy - 74 + Math.sin(Date.now() / 420) * 3;
+  ctx.save();
+  ctx.fillStyle = 'rgba(253,250,244,.96)';
+  roundRect(hx - 26, by - 24, 52, 40, 12); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(hx - 5, by + 14); ctx.lineTo(hx + 3, by + 24); ctx.lineTo(hx + 8, by + 14); ctx.closePath(); ctx.fill();
+  if (ready) {
+    // little bowl of ice
+    ctx.fillStyle = '#e9f4fb';
+    ctx.beginPath(); ctx.arc(hx, by - 2, 11, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = '#ff3d78';
+    ctx.beginPath(); ctx.arc(hx, by - 4, 8, Math.PI * 1.15, Math.PI * 1.85); ctx.fill();
+    ctx.strokeStyle = '#9db8c8'; ctx.lineWidth = 2.4;
+    ctx.beginPath(); ctx.arc(hx, by - 2, 11, 0, Math.PI); ctx.stroke();
+  } else {
+    ctx.fillStyle = '#f0a92e';
+    for (const [sx, sy, ss] of [[-11, 2, 5], [2, -6, 7], [12, 4, 4.5]]) {
+      ctx.save(); ctx.translate(hx + sx, by + sy);
+      ctx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4, rr = i % 2 ? ss * 0.42 : ss;
+        ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+      }
+      ctx.closePath(); ctx.fill(); ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
+const HINTS = [
+  'Hold the crank to shave the ice',
+  'Drag a syrup bottle over the bowl',
+  'Scoop toppings from the tins',
+  'Tap the kid when the bowl looks good',
+  ''
+];
+
+function drawHint() {
+  if (hintT <= 0 || hintStage >= HINTS.length) return;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, hintT) * 0.92;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = "800 16px 'Nunito', sans-serif";
+  const txt = HINTS[hintStage];
+  const w = ctx.measureText(txt).width + 34;
+  ctx.fillStyle = 'rgba(20,35,40,.72)';
+  roundRect(500 - w / 2, 122, w, 32, 16); ctx.fill();
+  ctx.fillStyle = C.cream;
+  ctx.fillText(txt, 500, 139);
+  ctx.restore();
+}
+
+function drawBowlGroup() {
+  ctx.save();
+  ctx.translate(bowlDX, 0);
+  drawBowlBack();
+  for (const b of bits) if (cellFilledAt(b.x, b.y)) drawBit(b, true);
+  ctx.save();
+  if (resetAnim > 0) ctx.globalAlpha = Math.max(0, 1 - resetAnim * 1.6);
+  drawSnow();
+  ctx.restore();
+  for (const b of bits) if (!cellFilledAt(b.x, b.y)) drawBit(b, false);
+  for (const d of drips) {
+    ctx.fillStyle = `rgb(${d.col[0]},${d.col[1]},${d.col[2]})`;
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath(); ctx.ellipse(d.x, d.y, d.thick ? 2.6 : 2, d.thick ? 4.2 : 5.5, 0, 0, 7); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  drawBowlFront();
+  ctx.restore();
+}
+
+function render() {
+  ctx.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  drawBackground();
+  drawSign();
+  drawKidBody();
+  drawCounter();
+  drawSpill();
+
+  if (serveState === 0) {
+    drawBowlGroup();
+    drawKidArms();
+    drawMachine();
+  } else {
+    drawMachine();
+    drawBowlGroup();
+    drawKidArms();
+  }
+
+
+
+  // cold mist
+  if (!REDUCED) {
+    ctx.save();
+    for (const m of mist) {
+      ctx.globalAlpha = m.life * 0.22;
+      ctx.fillStyle = '#dff0fb';
+      ctx.beginPath(); ctx.arc(m.x, m.y, m.r, 0, 7); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  for (const b of bottles) if (!(held && held.type === 'bottle' && held.ref === b && ptr.down)) drawBottle(b, b.x, b.y, 0, false);
+  for (const b of bins) drawBin(b);
+  if (!(held && held.type === 'spoon' && ptr.down)) drawSpoon(spoonHome.x, spoonHome.y, -0.18);
+  drawStack();
+  drawKidEmote();
+  drawHeld();
+  drawHint();
+}
+
+
+if (location.hash === '#debug') {
+  window.__ik = () => ({ serveState, snowCount, biteT, bowlDX: Math.round(bowlDX), bits: bits.length, active: active.length, resetAnim: +resetAnim.toFixed(2) });
+}
+function loop() { update(); render(); requestAnimationFrame(loop); }
+loop();
+
+})();
+</script>
+</body>
+</html>

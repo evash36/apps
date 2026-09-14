@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Bubble Bakery Duo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@500;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/js-confetti@latest/dist/js-confetti.browser.js"></script>
+<style>
+  :root{
+    --cream:#FFF8F0;
+    --cream-deep:#FBEFE0;
+    --pink:#FF8FAB;
+    --pink-deep:#E8628A;
+    --brown:#8B5E3C;
+    --brown-deep:#5C3A22;
+    --mint:#8FD9BE;
+    --gold:#F4B942;
+    --ink:#4A3728;
+    --white:#FFFDF9;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    min-height:100vh;
+    background:
+      radial-gradient(circle at 15% 10%, #FFEAD3 0%, transparent 45%),
+      radial-gradient(circle at 85% 90%, #FFDCEA 0%, transparent 45%),
+      var(--cream);
+    font-family:'Nunito',sans-serif;
+    color:var(--ink);
+    display:flex;
+    justify-content:center;
+    padding:16px;
+  }
+  #app{
+    width:100%;
+    max-width:820px;
+  }
+  h1,h2,h3,button{font-family:'Baloo 2',sans-serif;}
+  header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:10px;
+    background:var(--white);
+    border-radius:20px;
+    padding:14px 20px;
+    box-shadow:0 6px 0 rgba(139,94,60,0.15);
+    margin-bottom:16px;
+  }
+  header h1{
+    margin:0;
+    font-size:clamp(1.2rem,4vw,1.6rem);
+    color:var(--pink-deep);
+  }
+  #scorebar{
+    font-weight:800;
+    font-size:0.95rem;
+    display:flex;
+    gap:16px;
+    color:var(--brown-deep);
+  }
+  #stage-wrap{
+    position:relative;
+    background:var(--white);
+    border-radius:24px;
+    min-height:520px;
+    padding:22px;
+    box-shadow:0 8px 0 rgba(139,94,60,0.15);
+    overflow:hidden;
+  }
+  #order-card{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    background:var(--cream-deep);
+    border-radius:16px;
+    padding:10px 16px;
+    margin-bottom:18px;
+    width:fit-content;
+  }
+  #order-card .animal{font-size:2rem;}
+  #order-card .order-text{font-weight:800;font-size:1.05rem;color:var(--brown-deep);}
+  #order-card .order-icons{font-size:1.4rem;display:flex;gap:4px;}
+  .order-icons .done{opacity:0.35;}
+
+  #banner{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:rgba(255,248,240,0.96);
+    z-index:20;
+    text-align:center;
+    padding:20px;
+    animation:fadeBanner 1.3s ease forwards;
+    pointer-events:none;
+  }
+  #banner span{
+    font-size:clamp(1.5rem,6vw,2.4rem);
+    font-weight:800;
+    color:var(--pink-deep);
+  }
+  @keyframes fadeBanner{
+    0%{opacity:0;}
+    12%{opacity:1;}
+    78%{opacity:1;}
+    100%{opacity:0;}
+  }
+
+  .section-title{
+    font-weight:800;
+    font-size:1.1rem;
+    color:var(--brown-deep);
+    margin:0 0 12px 0;
+  }
+
+  /* Ingredient buttons */
+  #ingredient-grid{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    margin-bottom:22px;
+  }
+  .ing-btn{
+    border:none;
+    background:var(--cream-deep);
+    border-radius:14px;
+    padding:10px 14px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:4px;
+    cursor:pointer;
+    font-family:'Nunito',sans-serif;
+    font-weight:700;
+    font-size:0.85rem;
+    color:var(--brown-deep);
+    box-shadow:0 4px 0 rgba(139,94,60,0.18);
+    transition:transform 0.08s ease;
+  }
+  .ing-btn:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(139,94,60,0.18);}
+  .ing-btn .ic{font-size:1.6rem;}
+  .ing-btn.hint{animation:pulseHint 0.9s ease-in-out infinite;}
+  .ing-btn.wrong{animation:shakeX 0.35s ease;}
+  @keyframes pulseHint{
+    0%,100%{box-shadow:0 4px 0 rgba(139,94,60,0.18), 0 0 0 0 rgba(244,185,66,0.6);}
+    50%{box-shadow:0 4px 0 rgba(139,94,60,0.18), 0 0 0 8px rgba(244,185,66,0);}
+  }
+  @keyframes shakeX{
+    0%,100%{transform:translateX(0);}
+    25%{transform:translateX(-6px);}
+    75%{transform:translateX(6px);}
+  }
+
+  #bowl-row{
+    display:flex;
+    align-items:flex-end;
+    gap:10px;
+    min-height:70px;
+    background:var(--cream-deep);
+    border-radius:16px 16px 40px 40px;
+    padding:14px;
+    margin-bottom:18px;
+  }
+  #bowl-row .placeholder{color:#c9a980;font-size:0.85rem;font-weight:700;}
+  .bowl-item{font-size:1.6rem;animation:popIn 0.3s ease;}
+  @keyframes popIn{
+    0%{transform:scale(0);}
+    70%{transform:scale(1.2);}
+    100%{transform:scale(1);}
+  }
+
+  .big-btn{
+    border:none;
+    border-radius:16px;
+    padding:14px 26px;
+    font-size:1.1rem;
+    font-weight:800;
+    font-family:'Baloo 2',sans-serif;
+    cursor:pointer;
+    color:var(--white);
+    background:var(--pink);
+    box-shadow:0 5px 0 var(--pink-deep);
+    transition:transform 0.08s ease;
+  }
+  .big-btn:active{transform:translateY(4px);box-shadow:0 1px 0 var(--pink-deep);}
+  .big-btn:disabled{opacity:0.4;cursor:not-allowed;}
+  .big-btn.hint{animation:pulseHint 0.9s ease-in-out infinite;}
+
+  /* Mixing */
+  #mix-visual{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:18px;
+    padding:20px 0;
+  }
+  .mix-bowl{font-size:4.5rem;}
+  .mix-bowl.spin{animation:spin 0.5s linear infinite;}
+  @keyframes spin{
+    0%{transform:rotate(-8deg);}
+    50%{transform:rotate(8deg);}
+    100%{transform:rotate(-8deg);}
+  }
+
+  /* Oven */
+  #oven-visual{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:18px;
+    padding:10px 0 20px;
+  }
+  .oven-emoji{font-size:4rem;}
+  #oven-bar{
+    position:relative;
+    width:100%;
+    max-width:420px;
+    height:34px;
+    border-radius:17px;
+    background:linear-gradient(to right,#F3E3C3 0%, #F3E3C3 25%, var(--gold) 25%, var(--gold) 75%, #7A4A24 75%, #7A4A24 100%);
+    box-shadow:inset 0 2px 4px rgba(0,0,0,0.15);
+  }
+  #oven-indicator{
+    position:absolute;
+    top:-8px;
+    width:6px;
+    height:50px;
+    background:var(--brown-deep);
+    border-radius:3px;
+    left:0;
+  }
+
+  /* Cupcake visual */
+  .cupcake-wrap{
+    display:flex;
+    justify-content:center;
+    padding:14px 0 22px;
+  }
+  .cupcake{
+    position:relative;
+    width:150px;
+    height:180px;
+  }
+  .liner{
+    position:absolute;
+    bottom:0;
+    left:15px;
+    width:120px;
+    height:80px;
+    clip-path:polygon(10% 0%, 90% 0%, 100% 100%, 0% 100%);
+    background:repeating-linear-gradient(90deg, var(--pink) 0 12px, var(--white) 12px 24px);
+  }
+  .dome{
+    position:absolute;
+    bottom:70px;
+    left:22px;
+    width:106px;
+    height:70px;
+    border-radius:50% 50% 45% 45%;
+  }
+  .frosting{
+    position:absolute;
+    bottom:118px;
+    left:30px;
+    width:90px;
+    height:70px;
+    border-radius:50% 50% 40% 40% / 60% 60% 40% 40%;
+    transform-origin:bottom center;
+    animation:popIn 0.35s ease;
+  }
+  .topping{
+    position:absolute;
+    bottom:172px;
+    left:50%;
+    transform:translateX(-50%);
+    font-size:1.8rem;
+    animation:dropIn 0.4s ease;
+  }
+  @keyframes dropIn{
+    0%{transform:translate(-50%,-30px);opacity:0;}
+    100%{transform:translate(-50%,0);opacity:1;}
+  }
+
+  #frosting-grid,#topping-grid{
+    display:flex;
+    gap:12px;
+    justify-content:center;
+    flex-wrap:wrap;
+    margin-bottom:16px;
+  }
+  .swatch{
+    width:52px;
+    height:52px;
+    border-radius:50%;
+    border:3px solid var(--white);
+    box-shadow:0 3px 0 rgba(139,94,60,0.2);
+    cursor:pointer;
+  }
+  .swatch.selected{outline:3px solid var(--brown-deep);}
+  .topping-btn{
+    font-size:1.8rem;
+    background:var(--cream-deep);
+    border:none;
+    border-radius:14px;
+    padding:10px 14px;
+    cursor:pointer;
+    box-shadow:0 4px 0 rgba(139,94,60,0.18);
+  }
+  .topping-btn.selected{outline:3px solid var(--brown-deep);}
+
+  #serve-visual{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:10px;
+    padding:10px 0;
+  }
+  .customer-face{font-size:5rem;animation:popIn 0.4s ease;}
+  .speech-bubble{
+    background:var(--cream-deep);
+    border-radius:16px;
+    padding:12px 20px;
+    font-weight:800;
+    font-size:1.1rem;
+    color:var(--brown-deep);
+    max-width:80%;
+    text-align:center;
+  }
+  .stars-earned{font-size:1.4rem;}
+
+  .actions-row{
+    display:flex;
+    justify-content:center;
+    gap:12px;
+    flex-wrap:wrap;
+    margin-top:8px;
+  }
+
+  footer{
+    text-align:center;
+    margin-top:14px;
+    font-size:0.85rem;
+    color:#b99a7a;
+    font-weight:700;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .mix-bowl.spin, .ing-btn.hint, .big-btn.hint, #banner, .bowl-item, .frosting, .topping{
+      animation:none !important;
+    }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>🧁 Bubble Bakery Duo</h1>
+    <div id="scorebar">
+      <span>🧁 Served: <span id="served-count">0</span></span>
+      <span>⭐ Stars: <span id="star-count">0</span></span>
+    </div>
+  </header>
+  <div id="stage-wrap">
+    <div id="order-card"></div>
+    <div id="stage"></div>
+    <div id="banner" style="display:none;"><span></span></div>
+  </div>
+  <footer>Take turns: Eva bakes, Chloe decorates!</footer>
+</div>
+
+<script>
+// ---------- Audio ----------
+let audioCtx;
+function ensureAudio(){
+  if(!audioCtx){
+    audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  }
+  if(audioCtx.state==='suspended') audioCtx.resume();
+}
+function tone(freq, dur=0.15, type='sine', delay=0, gainVal=0.15){
+  ensureAudio();
+  const t0 = audioCtx.currentTime+delay;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type=type;
+  osc.frequency.setValueAtTime(freq,t0);
+  gain.gain.setValueAtTime(0,t0);
+  gain.gain.linearRampToValueAtTime(gainVal, t0+0.01);
+  gain.gain.exponentialRampToValueAtTime(0.001, t0+dur);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(t0);
+  osc.stop(t0+dur+0.03);
+}
+function sfxPop(){ tone(880,0.1,'sine'); }
+function sfxBuzz(){ tone(150,0.2,'sawtooth',0,0.1); }
+function sfxDing(){ tone(1200,0.25,'triangle'); tone(1600,0.3,'triangle',0.08); }
+function sfxWhoosh(){ tone(320,0.25,'sine'); tone(480,0.2,'sine',0.06); }
+function sfxPatter(){ for(let i=0;i<4;i++) tone(1000+i*130,0.06,'square',i*0.05,0.08); }
+function sfxCheer(tier){
+  const notes = tier==='great' ? [523,659,784,1046] : tier==='good' ? [523,659,784] : [523,587];
+  notes.forEach((f,i)=>tone(f,0.18,'triangle',i*0.12,0.12));
+}
+function speak(text){
+  if(!('speechSynthesis' in window)) return;
+  try{
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 0.95; u.pitch = 1.15;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+// ---------- Confetti ----------
+let confetti;
+window.addEventListener('load', ()=>{ try{ confetti = new JSConfetti(); }catch(e){} });
+function burst(count=40){
+  if(!confetti) return;
+  confetti.addConfetti({ confettiRadius:4, confettiNumber:count });
+}
+
+// ---------- Data ----------
+const FLAVORS = [
+  {id:'vanilla', name:'Vanilla', icon:'🍦', dome:'#FBEAC8', domeGood:'#F6DBA0', domeMeh:'#EFCB86'},
+  {id:'chocolate', name:'Chocolate', icon:'🍫', dome:'#8B5A3C', domeGood:'#7A4A2E', domeMeh:'#5C3A22'},
+  {id:'strawberry', name:'Strawberry', icon:'🍓', dome:'#F6AFC0', domeGood:'#F191A8', domeMeh:'#E8748F'}
+];
+const BASE_INGREDIENTS = [
+  {id:'flour', icon:'🌾', label:'Flour'},
+  {id:'butter', icon:'🧈', label:'Butter'},
+  {id:'sugar', icon:'🍬', label:'Sugar'},
+  {id:'egg', icon:'🥚', label:'Egg'}
+];
+const ANIMALS = ['🐰','🐻','🦊','🐼','🐸','🦁','🐨','🐵'];
+const FROSTINGS = [
+  {id:'pink', color:'#FF8FAB'},
+  {id:'white', color:'#FFFDF9'},
+  {id:'choco', color:'#6B4226'},
+  {id:'mint', color:'#8FD9BE'}
+];
+const TOPPINGS = [
+  {id:'sprinkles', icon:'🌈'},
+  {id:'cherry', icon:'🍒'},
+  {id:'star', icon:'⭐'},
+  {id:'heart', icon:'💖'}
+];
+const DIALOGUE = {
+  great: ["This is the BEST cupcake ever!", "Wow, amazing work!", "You two are bakery stars!"],
+  good: ["Yummy, thank you!", "Mmm, so good!", "This made my day!"],
+  okay: ["Thanks for the treat!", "Aww, thank you for trying!", "This is nice, thank you!"]
+};
+const FACES = { great:'😍', good:'😊', okay:'🙂' };
+
+// ---------- State ----------
+const state = {
+  served: 0,
+  stars: 0,
+  recentOutcomes: [],
+  flavor: null,
+  animal: null,
+  ingredientPool: [],
+  sequence: [],
+  stepIndex: 0,
+  bakeQuality: null,
+  frosting: null,
+  topping: null,
+  ovenAnimId: null,
+  ovenPos: 0,
+  ovenRunning: false
+};
+
+const stageEl = document.getElementById('stage');
+const orderCardEl = document.getElementById('order-card');
+const bannerEl = document.getElementById('banner');
+const servedCountEl = document.getElementById('served-count');
+const starCountEl = document.getElementById('star-count');
+
+function shuffle(arr){
+  const a = [...arr];
+  for(let i=a.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+function showBanner(text){
+  bannerEl.style.display='flex';
+  bannerEl.querySelector('span').textContent = text;
+  bannerEl.style.animation='none';
+  void bannerEl.offsetWidth;
+  bannerEl.style.animation='fadeBanner 1.3s ease forwards';
+  setTimeout(()=>{ bannerEl.style.display='none'; }, 1300);
+}
+
+function renderOrderCard(){
+  const flavor = state.flavor;
+  const doneIcons = state.sequence.map((id,i)=>{
+    const ing = BASE_INGREDIENTS.find(b=>b.id===id) || flavor;
+    const cls = i < state.stepIndex ? 'done' : '';
+    return `<span class="${cls}">${ing.icon}</span>`;
+  }).join('');
+  orderCardEl.innerHTML = `
+    <div class="animal">${state.animal}</div>
+    <div>
+      <div class="order-text">Order: ${flavor.name} Cupcake</div>
+      <div class="order-icons">${doneIcons}</div>
+    </div>
+  `;
+}
+
+function newCustomer(){
+  state.flavor = FLAVORS[Math.floor(Math.random()*FLAVORS.length)];
+  state.animal = ANIMALS[Math.floor(Math.random()*ANIMALS.length)];
+  state.sequence = [...BASE_INGREDIENTS.map(i=>i.id), state.flavor.id];
+  state.ingredientPool = shuffle([...BASE_INGREDIENTS, ...FLAVORS.map(f=>({id:f.id,icon:f.icon,label:f.name}))]);
+  state.stepIndex = 0;
+  state.bakeQuality = null;
+  state.frosting = null;
+  state.topping = null;
+  renderOrderCard();
+  showBanner("🎂 Eva's Turn: Bake it!");
+  renderBakePhase();
+}
+
+// ---------- BAKE PHASE ----------
+let hintTimer = null;
+function renderBakePhase(){
+  clearTimeout(hintTimer);
+  const bowlItems = state.sequence.slice(0, state.stepIndex).map(id=>{
+    const ing = BASE_INGREDIENTS.find(b=>b.id===id) || state.flavor;
+    return `<span class="bowl-item">${ing.icon}</span>`;
+  }).join('');
+  stageEl.innerHTML = `
+    <div class="section-title">Add the ingredients in order!</div>
+    <div id="bowl-row">${bowlItems || '<span class="placeholder">Tap ingredients below to fill the bowl</span>'}</div>
+    <div id="ingredient-grid">
+      ${state.ingredientPool.map(ing=>`<button class="ing-btn" data-id="${ing.id}"><span class="ic">${ing.icon}</span>${ing.label}</button>`).join('')}
+    </div>
+    <div class="actions-row">
+      <button class="big-btn" id="mix-btn" disabled>Mix It Up! 🥣</button>
+    </div>
+  `;
+  stageEl.querySelectorAll('.ing-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const id = btn.dataset.id;
+      if(id === state.sequence[state.stepIndex]){
+        sfxPop();
+        state.stepIndex++;
+        renderOrderCard();
+        renderBakePhase();
+        if(state.stepIndex >= state.sequence.length){
+          const mixBtn = document.getElementById('mix-btn');
+          mixBtn.disabled = false;
+          mixBtn.classList.add('hint');
+        }
+      } else {
+        sfxBuzz();
+        btn.classList.add('wrong');
+        setTimeout(()=>btn.classList.remove('wrong'), 350);
+      }
+    });
+  });
+  document.getElementById('mix-btn').addEventListener('click', startMixing);
+
+  // gentle inactivity hint
+  hintTimer = setTimeout(()=>{
+    const nextId = state.sequence[state.stepIndex];
+    if(nextId){
+      const btn = stageEl.querySelector(`.ing-btn[data-id="${nextId}"]`);
+      if(btn) btn.classList.add('hint');
+    }
+  }, 5000);
+}
+
+function startMixing(){
+  clearTimeout(hintTimer);
+  sfxWhoosh();
+  stageEl.innerHTML = `
+    <div id="mix-visual">
+      <div class="mix-bowl spin">🥣</div>
+      <div class="section-title">Mixing it all together...</div>
+    </div>
+  `;
+  setTimeout(startOven, 1600);
+}
+
+function startOven(){
+  stageEl.innerHTML = `
+    <div id="oven-visual">
+      <div class="oven-emoji">🔥🧁</div>
+      <div class="section-title">Watch the color and pull it out at the perfect moment!</div>
+      <div id="oven-bar"><div id="oven-indicator"></div></div>
+      <button class="big-btn" id="take-out-btn">Take It Out! 🧤</button>
+    </div>
+  `;
+  state.ovenPos = 0;
+  state.ovenRunning = true;
+  const cycle = 2400;
+  const startTime = performance.now();
+  const indicator = document.getElementById('oven-indicator');
+  function frame(now){
+    if(!state.ovenRunning) return;
+    const elapsed = (now - startTime) % cycle;
+    const t = (elapsed / cycle) * 2;
+    const pos = t <= 1 ? t*100 : (2-t)*100;
+    state.ovenPos = pos;
+    indicator.style.left = `calc(${pos}% - 3px)`;
+    state.ovenAnimId = requestAnimationFrame(frame);
+  }
+  state.ovenAnimId = requestAnimationFrame(frame);
+
+  document.getElementById('take-out-btn').addEventListener('click', ()=>{
+    state.ovenRunning = false;
+    cancelAnimationFrame(state.ovenAnimId);
+    const pos = state.ovenPos;
+    let quality, msg;
+    if(pos >= 25 && pos <= 75){ quality='perfect'; msg='Perfect Golden Bake! 🌟'; }
+    else if((pos>=15 && pos<25) || (pos>75 && pos<=85)){ quality='good'; msg = pos<25 ? 'A little pale, but yummy!' : 'A little toasty, but yummy!'; }
+    else { quality='meh'; msg = pos<15 ? 'Whoops, a bit raw — still a treat!' : 'Whoops, a bit burnt — still a treat!'; }
+    state.bakeQuality = quality;
+    sfxDing();
+    stageEl.innerHTML += `<div class="section-title" style="margin-top:14px;text-align:center;">${msg}</div>`;
+    setTimeout(()=>{
+      showBanner("🎨 Chloe's Turn: Decorate it!");
+      renderDecoratePhase();
+    }, 1300);
+  });
+}
+
+// ---------- DECORATE PHASE ----------
+function cupcakeHtml(){
+  const f = state.flavor;
+  let domeColor = f.dome;
+  if(state.bakeQuality === 'good') domeColor = f.domeGood;
+  if(state.bakeQuality === 'meh') domeColor = f.domeMeh;
+  const frostingHtml = state.frosting ? `<div class="frosting" style="background:${state.frosting.color};"></div>` : '';
+  const toppingHtml = state.topping ? `<div class="topping">${state.topping.icon}</div>` : '';
+  return `
+    <div class="cupcake-wrap">
+      <div class="cupcake">
+        <div class="liner"></div>
+        <div class="dome" style="background:${domeColor};"></div>
+        ${frostingHtml}
+        ${toppingHtml}
+      </div>
+    </div>
+  `;
+}
+
+function renderDecoratePhase(said){
+  stageEl.innerHTML = `
+    ${cupcakeHtml()}
+    <div class="section-title" style="text-align:center;">Pick a frosting color!</div>
+    <div id="frosting-grid">
+      ${FROSTINGS.map(fr=>`<button class="swatch ${state.frosting && state.frosting.id===fr.id ? 'selected':''}" data-id="${fr.id}" style="background:${fr.color};"></button>`).join('')}
+    </div>
+    <div class="section-title" style="text-align:center;">Now add a fun topping!</div>
+    <div id="topping-grid">
+      ${TOPPINGS.map(t=>`<button class="topping-btn ${state.topping && state.topping.id===t.id ? 'selected':''}" data-id="${t.id}">${t.icon}</button>`).join('')}
+    </div>
+    <div class="actions-row">
+      <button class="big-btn" id="serve-btn" ${(state.frosting && state.topping) ? '' : 'disabled'}>Serve It! 🎉</button>
+    </div>
+  `;
+  if(!said){
+    speak("Time to decorate! Pick a frosting color!");
+  }
+  stageEl.querySelectorAll('#frosting-grid .swatch').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      sfxWhoosh();
+      state.frosting = FROSTINGS.find(f=>f.id===btn.dataset.id);
+      renderDecoratePhase(true);
+      if(!state.topping) speak("Nice! Now add a fun topping!");
+      checkServeReady();
+    });
+  });
+  stageEl.querySelectorAll('#topping-grid .topping-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      sfxPatter();
+      burst(15);
+      state.topping = TOPPINGS.find(t=>t.id===btn.dataset.id);
+      renderDecoratePhase(true);
+      checkServeReady();
+    });
+  });
+  const serveBtn = document.getElementById('serve-btn');
+  if(serveBtn){
+    serveBtn.addEventListener('click', goToServe);
+    if(state.frosting && state.topping) serveBtn.classList.add('hint');
+  }
+}
+
+function checkServeReady(){
+  if(state.frosting && state.topping){
+    speak("All done! Let's serve it!");
+  }
+}
+
+// ---------- SERVE PHASE ----------
+function goToServe(){
+  showBanner("🎉 Serving Time!");
+  setTimeout(renderServePhase, 900);
+}
+
+function renderServePhase(){
+  const flavorMatch = true; // Eva always ends on the ordered flavor by following the recipe card
+  let tier;
+  if(state.bakeQuality === 'perfect') tier = 'great';
+  else if(state.bakeQuality === 'good') tier = 'good';
+  else tier = 'okay';
+
+  // streak-breaker: avoid three "okay" outcomes in a row
+  const last2 = state.recentOutcomes.slice(-2);
+  if(tier === 'okay' && last2.length === 2 && last2.every(o=>o==='okay')){
+    tier = 'good';
+  }
+  state.recentOutcomes.push(tier);
+
+  const starsEarned = tier==='great' ? 3 : tier==='good' ? 2 : 1;
+  state.stars += starsEarned;
+  state.served += 1;
+  servedCountEl.textContent = state.served;
+  starCountEl.textContent = state.stars;
+
+  const line = DIALOGUE[tier][Math.floor(Math.random()*DIALOGUE[tier].length)];
+
+  stageEl.innerHTML = `
+    <div id="serve-visual">
+      <div class="customer-face">${FACES[tier]}</div>
+      ${cupcakeHtml()}
+      <div class="speech-bubble">${state.animal} says: "${line}"</div>
+      <div class="stars-earned">${'⭐'.repeat(starsEarned)}</div>
+      <div class="actions-row">
+        <button class="big-btn hint" id="next-btn">Next Cupcake! 🧁</button>
+      </div>
+    </div>
+  `;
+  sfxCheer(tier);
+  if(tier !== 'okay') burst(50);
+
+  document.getElementById('next-btn').addEventListener('click', newCustomer);
+}
+
+// ---------- Boot ----------
+newCustomer();
+</script>
+</body>
+</html>

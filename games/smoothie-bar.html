@@ -1,0 +1,1466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smoothie Bar</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: radial-gradient(ellipse at top, #7fe0c4 0%, #3f8cb8 70%);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    overflow: hidden;
+    touch-action: none;
+  }
+  #wrap {
+    position: relative;
+    width: 100%;
+    max-width: 1000px;
+    aspect-ratio: 1000 / 650;
+  }
+  canvas {
+    width: 100%; height: 100%;
+    display: block;
+    border-radius: 14px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06);
+    cursor: pointer;
+    touch-action: none;
+  }
+  #hint {
+    position: absolute;
+    bottom: -34px;
+    left: 0; right: 0;
+    text-align: center;
+    color: #7a4a2e;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c" width="1000" height="650"></canvas>
+  <div id="hint">Tap a fruit on the shelf to drop it • tap whole fruit to slice it • drag pieces into the blender</div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+// ---------- Matter.js setup ----------
+const { Engine, World, Bodies, Body, Constraint, Composite, Events } = Matter;
+const engine = Engine.create();
+engine.gravity.y = 1.0;
+const world = engine.world;
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = 1000, H = 650;
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+canvas.width = W * DPR; canvas.height = H * DPR;
+ctx.scale(DPR, DPR);
+
+// ---------- Static geometry ----------
+function staticRect(x,y,w,h){
+  const b = Bodies.rectangle(x,y,w,h,{ isStatic:true, friction:0.7, restitution:0.15 });
+  b.plugin = { invisible:true };
+  return b;
+}
+const BOARD = { x1:40, y1:150, x2:400, y2:560 };
+const JAR   = { x1:445, y1:300, x2:635, y2:560, spoutX:635, spoutY:300 };
+const GLASS = { x1:715, y1:380, x2:880, y2:575 };
+
+World.add(world, [
+  staticRect(220, 575, 380, 30),                 // board floor
+  staticRect(40, 350, 20, 450),                   // board left wall
+  staticRect(400, 350, 20, 450),                  // board right wall (also jar-left side gap)
+  staticRect(540, 575, 210, 30),                  // jar floor
+  staticRect(445, 430, 16, 300),                  // jar left wall
+  staticRect(635, 430, 16, 300),                  // jar right wall
+  staticRect(500, 645, 1000, 40),                 // global safety floor
+  staticRect(-10, 325, 20, 650),                  // world left wall
+  staticRect(1010, 325, 20, 650),                 // world right wall
+]);
+
+// ---------- Fruit definitions ----------
+const FRUITS = {
+  strawberry: { label:'Strawberry', skin:'#d81e3f', flesh:'#ff5c77', seed:'#ffe27a', juice:'#e0264a', radius:30, pieces:4, seedCount:10, textured:'seeds' },
+  mango:      { label:'Mango',      skin:'#e8a33d', flesh:'#ffcf5c', seed:null,      juice:'#f3ac2e', radius:38, pieces:3, seedCount:0,  textured:'none' },
+  blueberry:  { label:'Blueberry',  skin:'#37437e', flesh:'#5670c9', seed:null,      juice:'#3c4f9e', radius:26, pieces:1, seedCount:0,  textured:'starcrown', autoPiece:true },
+  kiwi:       { label:'Kiwi',       skin:'#7a5230', flesh:'#9bcf3f', seed:'#2b2b2b', juice:'#8fd13f', radius:28, pieces:3, seedCount:14, textured:'kiwiseeds' },
+  orange:     { label:'Orange',     skin:'#f28c1c', flesh:'#ffab40', seed:null,      juice:'#ff9d2e', radius:36, pieces:4, seedCount:0,  textured:'segments' },
+  banana:     { label:'Banana',     skin:'#f4d35e', flesh:'#fdf3c4', seed:null,      juice:'#f2e08f', radius:26, pieces:4, seedCount:0,  textured:'none' },
+  pineapple:  { label:'Pineapple',  skin:'#f4c430', flesh:'#ffe07a', seed:null,      juice:'#f7d354', radius:34, pieces:3, seedCount:0,  textured:'segments', locked:true, price:8 },
+  watermelon: { label:'Watermelon', skin:'#3fae55', flesh:'#ff6f7a', seed:'#1a1a1a', juice:'#ff5865', radius:40, pieces:3, seedCount:8,  textured:'seeds', locked:true, price:14 },
+  dragonfruit:{ label:'Dragonfruit',skin:'#e64d8c', flesh:'#fbf7f0', seed:'#1a1a1a', juice:'#e878ac', radius:34, pieces:3, seedCount:16, textured:'kiwiseeds', locked:true, price:22 },
+  peach:      { label:'Peach',      skin:'#ffb37b', flesh:'#ffd9a0', seed:null,      juice:'#ffab6b', radius:32, pieces:3, seedCount:0,  textured:'none', locked:true, price:30 },
+  grape:      { label:'Grape',      skin:'#6b3fa0', flesh:'#8f5fc9', seed:null,      juice:'#7a4fb0', radius:17, pieces:1, seedCount:0,  textured:'starcrown', autoPiece:true, locked:true, price:40 },
+  lychee:     { label:'Lychee',     skin:'#e8c9a0', flesh:'#fff5e8', seed:'#7a4a2c', juice:'#f2ddb8', radius:22, pieces:2, seedCount:1,  textured:'kiwiseeds', locked:true, price:50 },
+  papaya:     { label:'Papaya',     skin:'#ff8c42', flesh:'#ffb877', seed:'#3a2a1a', juice:'#ff9a55', radius:36, pieces:3, seedCount:16, textured:'seeds', locked:true, price:60 },
+  pomegranate:{ label:'Pomegranate',skin:'#a91d3a', flesh:'#ff4757', seed:'#ffccd5', juice:'#e0264a', radius:34, pieces:3, seedCount:18, textured:'seeds', locked:true, price:70 },
+  passionfruit:{label:'Passionfruit',skin:'#6b2d5c', flesh:'#ffb703', seed:'#3a1a1a', juice:'#c9860c', radius:24, pieces:2, seedCount:14, textured:'seeds', locked:true, price:82 },
+  coconut:    { label:'Coconut',    skin:'#7a5230', flesh:'#fff8f0', seed:null,      juice:'#f2ede0', radius:40, pieces:3, seedCount:0,  textured:'none', locked:true, price:100 },
+};
+const FRUIT_KEYS = Object.keys(FRUITS);
+
+// ---------- Coins / unlocks / customer / shop state ----------
+let coins = 5;
+let unlockedFruits = {};
+FRUIT_KEYS.forEach(k=>{ unlockedFruits[k] = !FRUITS[k].locked; });
+function unlockedKeys(){ return FRUIT_KEYS.filter(k=>unlockedFruits[k]); }
+
+let shopOpen = false;
+let shopScroll = 0;
+let shopMaxScroll = 0;
+let isDraggingShop = false;
+let shopDragStartY = 0;
+let shopDragStartScroll = 0;
+
+const CUSTOMER = { x: 862, y: 205 };
+let customer = { order: null, mood: 'idle', bounce: 0 };
+function randomOrder(){
+  const pool = unlockedKeys();
+  const n = (pool.length >= 2 && Math.random() < 0.55) ? 2 : 1;
+  const shuffled = [...pool].sort(()=>Math.random()-0.5);
+  return shuffled.slice(0, Math.min(n, pool.length));
+}
+customer.order = randomOrder();
+
+function hexToRgb(h){ h=h.replace('#',''); return [parseInt(h.substr(0,2),16), parseInt(h.substr(2,2),16), parseInt(h.substr(4,2),16)]; }
+function rgbToHex(r,g,b){ return '#' + [r,g,b].map(v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0')).join(''); }
+function mixColors(hexArr){
+  let r=0,g=0,b=0;
+  hexArr.forEach(h=>{ const [rr,gg,bb]=hexToRgb(h); r+=rr; g+=gg; b+=bb; });
+  const n = hexArr.length || 1;
+  return rgbToHex(r/n, g/n, b/n);
+}
+function shade(hex, amt){
+  const [r,g,b] = hexToRgb(hex);
+  return rgbToHex(r+amt, g+amt, b+amt);
+}
+
+// ---------- Soft-body blob factory ----------
+let blobCounter = 1;
+const blobs = []; // all active fruit blobs (whole + piece)
+const lastThud = {}; // blobId -> timestamp, throttles landing thuds
+
+function createBlob(x, y, radius, fruitKey, type){
+  const id = blobCounter++;
+  const group = Body.nextGroup ? Body.nextGroup(true) : -id;
+  const N = 6;
+  const particles = [];
+  const localOffsets = [];
+  const pr = radius * 0.40;
+  const ringR = radius * 0.60;
+
+  for(let i=0;i<N;i++){
+    const ang = (i/N) * Math.PI*2;
+    const px = x + Math.cos(ang)*ringR;
+    const py = y + Math.sin(ang)*ringR;
+    const body = Bodies.circle(px, py, pr, {
+      friction: 0.55, frictionAir: 0.018, restitution: 0.35, density: 0.0016,
+      collisionFilter: { group: group },
+    });
+    body.blobId = id;
+    particles.push(body);
+    localOffsets.push(ang);
+  }
+  const center = Bodies.circle(x, y, radius*0.28, {
+    friction: 0.5, frictionAir: 0.02, restitution: 0.3, density: 0.0012,
+    collisionFilter: { group: group },
+  });
+  center.blobId = id;
+
+  const constraints = [];
+  for(let i=0;i<N;i++){
+    constraints.push(Constraint.create({
+      bodyA: particles[i], bodyB: particles[(i+1)%N],
+      stiffness: 0.85, damping: 0.25, length: (2*ringR*Math.sin(Math.PI/N))
+    }));
+    constraints.push(Constraint.create({
+      bodyA: particles[i], bodyB: center,
+      stiffness: 0.32, damping: 0.2, length: ringR
+    }));
+  }
+
+  World.add(world, particles);
+  World.add(world, [center]);
+  World.add(world, constraints);
+
+  // decorative texture points in local unit-circle space
+  const cfg = FRUITS[fruitKey];
+  const deco = [];
+  if(cfg.textured === 'seeds'){
+    for(let i=0;i<cfg.seedCount;i++){
+      const a = Math.random()*Math.PI*2, r = Math.random()*0.78;
+      deco.push({a, r});
+    }
+  } else if(cfg.textured === 'kiwiseeds'){
+    for(let i=0;i<cfg.seedCount;i++){
+      const a = (i/cfg.seedCount)*Math.PI*2 + Math.random()*0.15, r = 0.55 + Math.random()*0.28;
+      deco.push({a, r});
+    }
+  }
+
+  const blob = {
+    id, fruitKey, type, particles, center, constraints, deco,
+    radius, group,
+    insideJar: false,
+    dragging: false,
+    dead: false,
+  };
+  blobs.push(blob);
+  return blob;
+}
+
+function blobCentroid(b){
+  let x=0,y=0;
+  b.particles.forEach(p=>{ x+=p.position.x; y+=p.position.y; });
+  x/=b.particles.length; y/=b.particles.length;
+  return {x,y};
+}
+
+function removeBlob(b){
+  if(b.dead) return;
+  b.dead = true;
+  World.remove(world, b.particles);
+  World.remove(world, [b.center]);
+  World.remove(world, b.constraints);
+  const idx = blobs.indexOf(b);
+  if(idx>=0) blobs.splice(idx,1);
+}
+
+function setBlobVelocity(b, vx, vy){
+  b.particles.forEach(p=>Body.setVelocity(p,{x:vx + (Math.random()-0.5)*1.2, y:vy + (Math.random()-0.5)*1.2}));
+  Body.setVelocity(b.center, {x:vx, y:vy});
+}
+
+// ---------- Juice splash particles (decorative) ----------
+let splashes = [];
+function spawnSplash(x,y,color,count){
+  for(let i=0;i<count;i++){
+    const ang = Math.random()*Math.PI*2;
+    const speed = 2 + Math.random()*5;
+    splashes.push({
+      x, y, vx: Math.cos(ang)*speed, vy: Math.sin(ang)*speed - 2,
+      life: 1, r: 1.5 + Math.random()*2.5, color
+    });
+  }
+}
+let bubbleSeeds = [];
+function initBubbles(){
+  for(let i=0;i<10;i++){
+    bubbleSeeds.push({ xf: 0.15+Math.random()*0.7, phase: Math.random()*300, r: 1+Math.random()*1.8 });
+  }
+}
+
+function updateSplashes(dt){
+  splashes.forEach(s=>{
+    s.vy += 0.25;
+    s.x += s.vx; s.y += s.vy;
+    s.life -= 0.028;
+  });
+  splashes = splashes.filter(s=>s.life>0);
+}
+
+// ---------- Spawning ----------
+function spawnFruit(fruitKey, x, y){
+  const cfg = FRUITS[fruitKey];
+  if(blobs.length > 16) return null;
+  if(cfg.autoPiece){
+    return createBlob(x, y, cfg.radius, fruitKey, 'piece');
+  }
+  return createBlob(x, y, cfg.radius, fruitKey, 'whole');
+}
+
+function sliceFruit(b){
+  const cfg = FRUITS[b.fruitKey];
+  const c = blobCentroid(b);
+  spawnSplash(c.x, c.y, cfg.juice, 16);
+  removeBlob(b);
+  playChop(); playSplash();
+  const n = cfg.pieces;
+  const pieceR = Math.max(11, cfg.radius*0.5);
+  for(let i=0;i<n;i++){
+    const ang = (i/n)*Math.PI*2 + Math.random()*0.4;
+    const px = c.x + Math.cos(ang)*cfg.radius*0.4;
+    const py = c.y + Math.sin(ang)*cfg.radius*0.4 - 6;
+    const piece = createBlob(px, py, pieceR, b.fruitKey, 'piece');
+    setBlobVelocity(piece, Math.cos(ang)*3, Math.sin(ang)*2 - 3);
+  }
+}
+
+// ---------- Jar / blend / pour state ----------
+const jarCenter = { x: (JAR.x1+JAR.x2)/2, y: 460 };
+let jarState = 'empty';        // empty | liquid
+let jarLiquidColor = null;
+let jarIngredients = [];
+let blending = false;
+let blendProgress = 0;
+let blendPieces = [];          // { blob, startX, startY, startDist, angle }
+let blendMixColor = null;
+
+let pouring = false;
+let pourProgress = 0;
+let pourColor = null;
+
+let glassState = 'empty';      // empty | full
+let glassColor = null;
+let glassIngredients = [];
+let glassFill = 0;             // 0..0.85 animated
+
+function piecesInJar(){
+  return blobs.filter(b=>b.type==='piece' && !b.dead && inJarBounds(blobCentroid(b)));
+}
+function inJarBounds(p){
+  return p.x > JAR.x1+14 && p.x < JAR.x2-14 && p.y > JAR.y1+10 && p.y < JAR.y2-14;
+}
+
+function flavorName(ingredients){
+  const set = [...new Set(ingredients)];
+  if(set.length===1) return FRUITS[set[0]].label + ' Smoothie';
+  const has = k => set.includes(k);
+  if(has('strawberry') && has('blueberry')) return 'Berry Blast';
+  if(has('mango') && has('orange')) return 'Tropical Sunrise';
+  if(has('kiwi') && has('banana')) return 'Kiwi Banana Cooler';
+  if(set.length>=4) return 'Rainbow Rush';
+  const labels = set.map(k=>FRUITS[k].label);
+  if(labels.length===2) return labels.join(' & ') + ' Smoothie';
+  return labels.slice(0,2).join(' ') + ' Mix';
+}
+
+function startBlend(){
+  const inside = piecesInJar();
+  if(inside.length < 1 || blending || jarState==='liquid') return;
+  blending = true;
+  blendProgress = 0;
+  jarIngredients = inside.map(b=>b.fruitKey);
+  blendMixColor = mixColors(inside.map(b=>FRUITS[b.fruitKey].flesh));
+  blendPieces = inside.map(b=>{
+    const c = blobCentroid(b);
+    const dx = c.x - jarCenter.x, dy = c.y - jarCenter.y;
+    return { blob:b, startX:c.x, startY:c.y, startDist: Math.hypot(dx,dy), angle: Math.atan2(dy,dx) };
+  });
+  // remove from physics world immediately; we animate them manually
+  blendPieces.forEach(bp=>{ World.remove(world, bp.blob.particles); World.remove(world, [bp.blob.center]); World.remove(world, bp.blob.constraints); const idx=blobs.indexOf(bp.blob); if(idx>=0) blobs.splice(idx,1); bp.blob.dead=true; });
+  startBlendSound();
+}
+
+function updateBlend(dt){
+  if(!blending) return;
+  blendProgress += dt/1600;
+  if(blendProgress >= 1){
+    blending = false;
+    blendProgress = 1;
+    jarState = 'liquid';
+    jarLiquidColor = blendMixColor;
+    stopBlendSound();
+  }
+}
+
+function startPour(){
+  if(jarState!=='liquid' || pouring) return;
+  pouring = true;
+  pourProgress = 0;
+  pourColor = jarLiquidColor;
+  glassIngredients = jarIngredients.slice();
+  playPour();
+}
+
+let pourSplashTimer = 0;
+function updatePour(dt){
+  if(!pouring) return;
+  pourProgress += dt/1100;
+
+  if(pourProgress > 0.08 && pourProgress < 0.95){
+    pourSplashTimer -= dt;
+    if(pourSplashTimer <= 0){
+      pourSplashTimer = 35;
+      const impactX = GLASS.x1 + (GLASS.x2-GLASS.x1)*0.5 + (Math.random()*10-5);
+      const impactY = GLASS.y2 - gy2fillOffset() - 4;
+      spawnSplash(impactX, impactY, pourColor, 2);
+    }
+  }
+
+  if(pourProgress >= 1){
+    pouring = false;
+    pourProgress = 1;
+    jarState = 'empty';
+    jarLiquidColor = null;
+    glassState = 'full';
+    glassColor = pourColor;
+    spawnSplash(GLASS.x1+(GLASS.x2-GLASS.x1)*0.5, GLASS.y2-gy2fillOffset(), pourColor, 10);
+    playChime();
+  }
+  glassFill = 0.85 * Math.min(1, Math.max(0, (pourProgress-0.15)/0.7));
+}
+
+function resetGlass(){
+  glassState = 'empty';
+  glassColor = null;
+  glassIngredients = [];
+  glassFill = 0;
+}
+
+function serveCustomer(){
+  if(glassState !== 'full') return;
+  const orderSet = new Set(customer.order);
+  const gotSet = new Set(glassIngredients);
+  const exact = orderSet.size === gotSet.size && [...orderSet].every(k=>gotSet.has(k));
+  const overlap = [...orderSet].some(k=>gotSet.has(k));
+
+  let reward;
+  if(exact){ reward = 15; customer.mood = 'superhappy'; }
+  else if(overlap){ reward = 7; customer.mood = 'happy'; }
+  else { reward = 3; customer.mood = 'happy'; }
+
+  coins += reward;
+  customer.bounce = 1;
+  spawnSplash(CUSTOMER.x, CUSTOMER.y-30, exact ? '#ffd166' : '#ffb3c6', exact ? 18 : 10);
+  playChime();
+  resetGlass();
+  customer.order = randomOrder();
+  setTimeout(()=>{ customer.mood = 'idle'; }, 1300);
+}
+
+function buyFruit(key){
+  const cfg = FRUITS[key];
+  if(!cfg.locked || unlockedFruits[key] || coins < cfg.price) return;
+  coins -= cfg.price;
+  unlockedFruits[key] = true;
+  playCoin();
+}
+
+function resetGame(){
+  // clear every fruit/piece currently on the board or in the blender
+  [...blobs].forEach(b=>removeBlob(b));
+  splashes = [];
+
+  // stop any in-flight blend
+  blending = false;
+  blendProgress = 0;
+  blendPieces = [];
+  blendMixColor = null;
+  if(blendNodes){ stopBlendSound(); }
+
+  // stop any in-flight pour
+  pouring = false;
+  pourProgress = 0;
+  pourColor = null;
+  pourSplashTimer = 0;
+
+  jarState = 'empty';
+  jarLiquidColor = null;
+  jarIngredients = [];
+
+  resetGlass();
+  customer.mood = 'idle';
+  customer.bounce = 0;
+  customer.order = randomOrder();
+  shopOpen = false;
+}
+
+// ---------- Audio ----------
+let actx = null;
+function ensureAudio(){
+  if(!actx){ actx = new (window.AudioContext||window.webkitAudioContext)(); }
+  if(actx.state==='suspended') actx.resume();
+  startAmbient();
+}
+function noiseBuffer(dur){
+  const sr = actx.sampleRate, len = Math.floor(sr*dur);
+  const buf = actx.createBuffer(1, len, sr);
+  const d = buf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i] = Math.random()*2-1;
+  return buf;
+}
+function playChop(){
+  if(!actx) return;
+  const t = actx.currentTime;
+  const src = actx.createBufferSource(); src.buffer = noiseBuffer(0.06);
+  const bp = actx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=2600; bp.Q.value=1.2;
+  const g = actx.createGain(); g.gain.setValueAtTime(0.5,t); g.gain.exponentialRampToValueAtTime(0.001, t+0.07);
+  src.connect(bp); bp.connect(g); g.connect(actx.destination); src.start(t); src.stop(t+0.08);
+
+  const osc = actx.createOscillator(); osc.type='sine'; osc.frequency.setValueAtTime(110,t); osc.frequency.exponentialRampToValueAtTime(55,t+0.08);
+  const g2 = actx.createGain(); g2.gain.setValueAtTime(0.35,t); g2.gain.exponentialRampToValueAtTime(0.001,t+0.09);
+  osc.connect(g2); g2.connect(actx.destination); osc.start(t); osc.stop(t+0.1);
+}
+function playSplash(){
+  if(!actx) return;
+  const t = actx.currentTime;
+  const src = actx.createBufferSource(); src.buffer = noiseBuffer(0.32);
+  const bp = actx.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=0.9;
+  bp.frequency.setValueAtTime(1400,t); bp.frequency.exponentialRampToValueAtTime(300,t+0.3);
+  const g = actx.createGain(); g.gain.setValueAtTime(0.25,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.32);
+  src.connect(bp); bp.connect(g); g.connect(actx.destination); src.start(t); src.stop(t+0.33);
+}
+function playPop(){
+  if(!actx) return;
+  const t = actx.currentTime;
+  const osc = actx.createOscillator(); osc.type='sine';
+  osc.frequency.setValueAtTime(520,t); osc.frequency.exponentialRampToValueAtTime(880,t+0.08);
+  const g = actx.createGain(); g.gain.setValueAtTime(0.22,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.1);
+  osc.connect(g); g.connect(actx.destination); osc.start(t); osc.stop(t+0.11);
+}
+let blendNodes = null;
+function startBlendSound(){
+  if(!actx) return;
+  const t = actx.currentTime;
+  const osc = actx.createOscillator(); osc.type='sawtooth'; osc.frequency.value=130;
+  const lfo = actx.createOscillator(); lfo.type='sine'; lfo.frequency.value=7;
+  const lfoGain = actx.createGain(); lfoGain.gain.value=18;
+  lfo.connect(lfoGain); lfoGain.connect(osc.frequency);
+
+  const noiseSrc = actx.createBufferSource(); noiseSrc.buffer = noiseBuffer(2); noiseSrc.loop=true;
+  const bp = actx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=900; bp.Q.value=0.6;
+
+  const oscGain = actx.createGain(); oscGain.gain.setValueAtTime(0,t); oscGain.gain.linearRampToValueAtTime(0.16,t+0.12);
+  const noiseGain = actx.createGain(); noiseGain.gain.setValueAtTime(0,t); noiseGain.gain.linearRampToValueAtTime(0.10,t+0.12);
+
+  osc.connect(oscGain); oscGain.connect(actx.destination);
+  noiseSrc.connect(bp); bp.connect(noiseGain); noiseGain.connect(actx.destination);
+
+  osc.start(t); lfo.start(t); noiseSrc.start(t);
+  blendNodes = { osc, lfo, noiseSrc, oscGain, noiseGain };
+}
+function stopBlendSound(){
+  if(!actx || !blendNodes) return;
+  const t = actx.currentTime;
+  blendNodes.oscGain.gain.linearRampToValueAtTime(0, t+0.18);
+  blendNodes.noiseGain.gain.linearRampToValueAtTime(0, t+0.18);
+  const nodes = blendNodes;
+  setTimeout(()=>{ try{ nodes.osc.stop(); nodes.lfo.stop(); nodes.noiseSrc.stop(); }catch(e){} }, 220);
+  blendNodes = null;
+}
+function playPour(){
+  if(!actx) return;
+  const t = actx.currentTime, dur = 1.05;
+  const src = actx.createBufferSource(); src.buffer = noiseBuffer(dur); src.loop=false;
+  const lp = actx.createBiquadFilter(); lp.type='lowpass';
+  lp.frequency.setValueAtTime(1400,t); lp.frequency.linearRampToValueAtTime(350,t+dur);
+  const g = actx.createGain();
+  g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.22,t+0.15);
+  g.gain.setValueAtTime(0.22,t+dur-0.25); g.gain.linearRampToValueAtTime(0.001,t+dur);
+  src.connect(lp); lp.connect(g); g.connect(actx.destination); src.start(t); src.stop(t+dur+0.05);
+}
+function playThud(strength){
+  if(!actx) return;
+  const t = actx.currentTime;
+  const vol = Math.min(0.28, 0.06 + strength*0.05);
+  const osc = actx.createOscillator(); osc.type='sine';
+  osc.frequency.setValueAtTime(150,t); osc.frequency.exponentialRampToValueAtTime(60,t+0.1);
+  const g = actx.createGain(); g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.13);
+  osc.connect(g); g.connect(actx.destination); osc.start(t); osc.stop(t+0.14);
+
+  const src = actx.createBufferSource(); src.buffer = noiseBuffer(0.04);
+  const bp = actx.createBiquadFilter(); bp.type='lowpass'; bp.frequency.value=500;
+  const g2 = actx.createGain(); g2.gain.setValueAtTime(vol*0.5,t); g2.gain.exponentialRampToValueAtTime(0.001,t+0.05);
+  src.connect(bp); bp.connect(g2); g2.connect(actx.destination); src.start(t); src.stop(t+0.06);
+}
+function playClick(){
+  if(!actx) return;
+  const t = actx.currentTime;
+  const osc = actx.createOscillator(); osc.type='triangle';
+  osc.frequency.setValueAtTime(700,t); osc.frequency.exponentialRampToValueAtTime(500,t+0.06);
+  const g = actx.createGain(); g.gain.setValueAtTime(0.16,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.08);
+  osc.connect(g); g.connect(actx.destination); osc.start(t); osc.stop(t+0.09);
+}
+function playChime(){
+  if(!actx) return;
+  const t = actx.currentTime;
+  const notes = [523.25, 659.25, 783.99, 1046.5]; // C E G C - little fanfare
+  notes.forEach((freq,i)=>{
+    const start = t + i*0.09;
+    const osc = actx.createOscillator(); osc.type='sine'; osc.frequency.value=freq;
+    const g = actx.createGain();
+    g.gain.setValueAtTime(0,start);
+    g.gain.linearRampToValueAtTime(0.2, start+0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, start+0.5);
+    osc.connect(g); g.connect(actx.destination);
+    osc.start(start); osc.stop(start+0.55);
+  });
+}
+function playCoin(){
+  if(!actx) return;
+  const t = actx.currentTime;
+  [880, 1318.5].forEach((freq,i)=>{
+    const start = t + i*0.06;
+    const osc = actx.createOscillator(); osc.type='square'; osc.frequency.value=freq;
+    const g = actx.createGain();
+    g.gain.setValueAtTime(0.13, start);
+    g.gain.exponentialRampToValueAtTime(0.001, start+0.16);
+    osc.connect(g); g.connect(actx.destination);
+    osc.start(start); osc.stop(start+0.18);
+  });
+}
+
+// ---------- Ambient background pad ----------
+let ambientNodes = null;
+let ambientOn = true;
+function startAmbient(){
+  if(!actx || ambientNodes) return;
+  const master = actx.createGain(); master.gain.value = 0.05;
+  master.connect(actx.destination);
+
+  const notes = [261.63, 329.63, 392.0]; // soft C major triad, gently detuned
+  const oscs = notes.map((freq,i)=>{
+    const o = actx.createOscillator(); o.type='sine';
+    o.frequency.value = freq * (1 + (i-1)*0.0025);
+    const og = actx.createGain(); og.gain.value = 0.5;
+    o.connect(og); og.connect(master);
+    o.start();
+    return o;
+  });
+  // slow filtered shimmer via LFO on master gain
+  const lfo = actx.createOscillator(); lfo.type='sine'; lfo.frequency.value=0.07;
+  const lfoGain = actx.createGain(); lfoGain.gain.value=0.02;
+  lfo.connect(lfoGain); lfoGain.connect(master.gain);
+  lfo.start();
+
+  ambientNodes = { master, oscs, lfo };
+}
+function toggleAmbient(){
+  ambientOn = !ambientOn;
+  if(ambientNodes){
+    ambientNodes.master.gain.linearRampToValueAtTime(ambientOn ? 0.05 : 0, actx.currentTime+0.3);
+  }
+}
+
+// ---------- Input handling ----------
+let pointer = { x:0, y:0, down:false, moved:false, startX:0, startY:0, startT:0 };
+let draggingBlob = null;
+let dragOffset = { x:0, y:0 };
+
+function canvasPos(evt){
+  const rect = canvas.getBoundingClientRect();
+  const cx = (evt.clientX ?? (evt.touches && evt.touches[0].clientX)) - rect.left;
+  const cy = (evt.clientY ?? (evt.touches && evt.touches[0].clientY)) - rect.top;
+  return { x: cx * (W/rect.width), y: cy * (H/rect.height) };
+}
+
+// UI hit regions (computed each frame in draw, stored here)
+let uiRegions = { shelf:[], blend:null, pour:null, serve:null, restart:null, mute:null, shop:null, shopClose:null, shopBuy:[] };
+
+function hitShelf(x,y){
+  for(const r of uiRegions.shelf){
+    if(x>=r.x && x<=r.x+r.w && y>=r.y && y<=r.y+r.h) return r.key;
+  }
+  return null;
+}
+function hitButton(btn, x, y){
+  if(!btn || !btn.enabled) return false;
+  return x>=btn.x && x<=btn.x+btn.w && y>=btn.y && y<=btn.y+btn.h;
+}
+
+function topBlobAt(x,y){
+  for(let i=blobs.length-1;i>=0;i--){
+    const b = blobs[i];
+    if(blending && blendPieces.find(bp=>bp.blob===b)) continue;
+    const c = blobCentroid(b);
+    const d = Math.hypot(c.x-x, c.y-y);
+    if(d < b.radius*1.15) return b;
+  }
+  return null;
+}
+
+canvas.addEventListener('pointerdown', (e)=>{
+  ensureAudio();
+  const p = canvasPos(e);
+  pointer.down = true; pointer.moved = false;
+  pointer.startX = p.x; pointer.startY = p.y; pointer.startT = performance.now();
+  pointer.x = p.x; pointer.y = p.y;
+
+  if(shopOpen){
+    if(hitButton(uiRegions.shopClose, p.x, p.y)){ playClick(); shopOpen=false; return; }
+    for(const btn of uiRegions.shopBuy){
+      if(hitButton(btn, p.x, p.y)){ buyFruit(btn.key); return; }
+    }
+    // not on a button — start a drag so the list can be swiped up/down
+    isDraggingShop = true;
+    shopDragStartY = p.y;
+    shopDragStartScroll = shopScroll;
+    return; // block everything else while shop is open
+  }
+
+  const shelfKey = hitShelf(p.x, p.y);
+  if(shelfKey){
+    const idx = unlockedKeys().indexOf(shelfKey);
+    const dropX = 90 + idx*55 + (Math.random()*20-10);
+    spawnFruit(shelfKey, Math.min(370,Math.max(70,dropX)), 190);
+    return;
+  }
+  if(hitButton(uiRegions.blend, p.x, p.y)){ startBlend(); return; }
+  if(hitButton(uiRegions.pour, p.x, p.y)){ startPour(); return; }
+  if(hitButton(uiRegions.serve, p.x, p.y)){ serveCustomer(); return; }
+  if(hitButton(uiRegions.restart, p.x, p.y)){ playClick(); resetGame(); return; }
+  if(hitButton(uiRegions.mute, p.x, p.y)){ toggleAmbient(); return; }
+  if(hitButton(uiRegions.shop, p.x, p.y)){ playClick(); shopOpen = true; shopScroll = 0; return; }
+
+  const b = topBlobAt(p.x, p.y);
+  if(b){
+    draggingBlob = b;
+    const c = blobCentroid(b);
+    dragOffset.x = c.x - p.x; dragOffset.y = c.y - p.y;
+    b.dragging = true;
+  }
+});
+
+window.addEventListener('pointermove', (e)=>{
+  if(!pointer.down) return;
+  const p = canvasPos(e);
+  if(Math.hypot(p.x-pointer.startX, p.y-pointer.startY) > 4) pointer.moved = true;
+  pointer.x = p.x; pointer.y = p.y;
+
+  if(isDraggingShop){
+    const delta = shopDragStartY - p.y; // drag up = scroll down the list
+    shopScroll = Math.min(shopMaxScroll, Math.max(0, shopDragStartScroll + delta));
+    return;
+  }
+
+  if(draggingBlob){
+    const targetX = p.x + dragOffset.x, targetY = p.y + dragOffset.y;
+    const c = blobCentroid(draggingBlob);
+    const dx = targetX - c.x, dy = targetY - c.y;
+    draggingBlob.particles.forEach(part=>{
+      Body.setPosition(part, { x: part.position.x+dx, y: part.position.y+dy });
+      Body.setVelocity(part, { x: dx*0.9, y: dy*0.9 });
+    });
+    Body.setPosition(draggingBlob.center, { x: draggingBlob.center.position.x+dx, y: draggingBlob.center.position.y+dy });
+  }
+});
+
+window.addEventListener('pointerup', (e)=>{
+  if(!pointer.down) return;
+  pointer.down = false;
+
+  if(isDraggingShop){
+    isDraggingShop = false;
+    return;
+  }
+  if(shopOpen) return;
+
+  const wasClick = !pointer.moved && (performance.now()-pointer.startT) < 400;
+
+  if(draggingBlob){
+    draggingBlob.dragging = false;
+    if(wasClick && draggingBlob.type==='whole'){
+      sliceFruit(draggingBlob);
+    } else if(draggingBlob.type==='piece'){
+      const c = blobCentroid(draggingBlob);
+      if(inJarBounds(c)) playPop();
+    }
+    draggingBlob = null;
+    return;
+  }
+
+  if(wasClick){
+    const b = topBlobAt(pointer.x, pointer.y);
+    if(b && b.type==='whole') sliceFruit(b);
+  }
+});
+
+// ---------- Rendering ----------
+function drawBackground(){
+  const g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#7fe0c4'); g.addColorStop(0.55,'#5cc8d6'); g.addColorStop(1,'#4fa9d8');
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+  // soft light glow
+  const glow = ctx.createRadialGradient(W*0.18,80,10,W*0.18,80,260);
+  glow.addColorStop(0,'rgba(255,255,255,0.4)');
+  glow.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle = glow; ctx.fillRect(0,0,W,H);
+  // counter
+  const counterG = ctx.createLinearGradient(0,560,0,H);
+  counterG.addColorStop(0,'#5a3a26'); counterG.addColorStop(1,'#3c2517');
+  ctx.fillStyle = counterG;
+  ctx.fillRect(0, 560, W, H-560);
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  for(let i=0;i<W;i+=40){ ctx.fillRect(i,560,1,H-560); }
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.fillRect(0,560,W,4);
+}
+
+function drawShelf(){
+  uiRegions.shelf = [];
+  ctx.fillStyle = 'rgba(255,255,255,0.28)';
+  roundRect(20, 14, 860, 84, 12);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth=1.5;
+  roundRect(20, 14, 860, 84, 12);
+  ctx.stroke();
+
+  const keys = unlockedKeys();
+  const spacing = keys.length > 1 ? Math.min(140, 780/(keys.length-1)) : 0;
+  const startX = keys.length > 1 ? 100 : 450;
+
+  keys.forEach((key, i)=>{
+    const cfg = FRUITS[key];
+    const x = startX + i*spacing;
+    const y = 56;
+    uiRegions.shelf.push({ key, x: x-38, y: 20, w: 76, h: 70 });
+
+    ctx.save();
+    const grad = ctx.createRadialGradient(x-8,y-10,3,x,y,26);
+    grad.addColorStop(0, shade(cfg.skin,50));
+    grad.addColorStop(1, cfg.skin);
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(x,y,24,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.15)'; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.restore();
+
+    ctx.fillStyle = '#4a2c17';
+    ctx.font = 'bold 11px Segoe UI, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(cfg.label, x, y+40);
+  });
+
+  // coin badge + shop button, in the reclaimed space on the right
+  ctx.save();
+  roundRect(890, 14, 90, 84, 12);
+  ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth=1.5;
+  roundRect(890, 14, 90, 84, 12); ctx.stroke();
+  ctx.fillStyle = '#4a2c17'; ctx.font = 'bold 15px Segoe UI, sans-serif'; ctx.textAlign='center';
+  ctx.fillText('🪙 ' + coins, 935, 40);
+  ctx.restore();
+
+  uiRegions.shop = { x: 897, y: 58, w: 76, h: 30, enabled: true };
+  drawButton(uiRegions.shop, 'Shop', '#c9a4ff');
+}
+
+function drawBoard(){
+  ctx.save();
+  const g = ctx.createLinearGradient(BOARD.x1,0,BOARD.x2,0);
+  g.addColorStop(0,'#a9764c'); g.addColorStop(0.5,'#c08a55'); g.addColorStop(1,'#a9764c');
+  ctx.fillStyle = g;
+  roundRect(BOARD.x1, 420, BOARD.x2-BOARD.x1, 150, 10);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth=3;
+  roundRect(BOARD.x1, 420, BOARD.x2-BOARD.x1, 150, 10); ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,0,0,0.08)'; ctx.lineWidth=1;
+  for(let i=0;i<8;i++){
+    ctx.beginPath(); ctx.moveTo(BOARD.x1+10, 432+i*17); ctx.lineTo(BOARD.x2-10, 432+i*17); ctx.stroke();
+  }
+  ctx.fillStyle = '#5a3a22'; ctx.font='bold 12px Segoe UI, sans-serif'; ctx.textAlign='left';
+  ctx.fillText('cutting board', BOARD.x1+8, 415);
+  ctx.restore();
+}
+
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+function drawJar(){
+  const jx1=JAR.x1, jx2=JAR.x2, jy1=260, jy2=560;
+  ctx.save();
+  // liquid or blending swirl (clipped to jar interior)
+  ctx.save();
+  roundRect(jx1+6, jy1+18, jx2-jx1-12, jy2-jy1-24, 14);
+  ctx.clip();
+
+  if(jarState==='liquid' && !pouring){
+    const t = performance.now()/500;
+    const grad = ctx.createLinearGradient(jx1,jy1,jx1,jy2);
+    grad.addColorStop(0, shade(jarLiquidColor, 30));
+    grad.addColorStop(1, shade(jarLiquidColor, -20));
+    ctx.fillStyle = grad;
+    ctx.fillRect(jx1, jy1+40, jx2-jx1, jy2-jy1);
+    ctx.strokeStyle='rgba(255,255,255,0.25)'; ctx.lineWidth=3;
+    ctx.beginPath();
+    for(let x=jx1;x<=jx2;x+=6){
+      const yy = jy1+40 + Math.sin(x*0.06+t)*3;
+      x===jx1?ctx.moveTo(x,yy):ctx.lineTo(x,yy);
+    }
+    ctx.stroke();
+  } else if(jarState==='liquid' && pouring){
+    const level = jy2 - (jy2-jy1-60)*(1-pourProgress*0.9);
+    const grad = ctx.createLinearGradient(jx1,level,jx1,jy2);
+    grad.addColorStop(0, shade(jarLiquidColor,30));
+    grad.addColorStop(1, shade(jarLiquidColor,-20));
+    ctx.fillStyle = grad;
+    ctx.fillRect(jx1, level, jx2-jx1, jy2-level);
+  }
+  ctx.restore();
+
+  // jar glass outline
+  ctx.strokeStyle = 'rgba(220,235,245,0.55)';
+  ctx.lineWidth = 4;
+  roundRect(jx1, jy1, jx2-jx1, jy2-jy1, 16);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(220,235,245,0.06)';
+  roundRect(jx1, jy1, jx2-jx1, jy2-jy1, 16);
+  ctx.fill();
+  // rim
+  ctx.strokeStyle='rgba(220,235,245,0.8)'; ctx.lineWidth=5;
+  ctx.beginPath(); ctx.moveTo(jx1-4, jy1); ctx.lineTo(jx2+4, jy1); ctx.stroke();
+
+  ctx.fillStyle = '#5a3a22'; ctx.font='bold 12px Segoe UI, sans-serif'; ctx.textAlign='left';
+  ctx.fillText('blender', jx1, jy1-8);
+  ctx.restore();
+
+  // blending swirl pieces
+  if(blending){
+    blendPieces.forEach(bp=>{
+      const dist = bp.startDist * (1-blendProgress);
+      const ang = bp.angle + blendProgress*14;
+      const x = jarCenter.x + Math.cos(ang)*dist;
+      const y = jarCenter.y + Math.sin(ang)*dist*0.7;
+      const scale = 1-blendProgress;
+      const cfg = FRUITS[bp.blob.fruitKey];
+      ctx.save();
+      ctx.globalAlpha = 0.55 + 0.45*scale;
+      ctx.fillStyle = cfg.flesh;
+      ctx.beginPath(); ctx.arc(x,y, Math.max(2,bp.blob.radius*0.55*scale), 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+    });
+  }
+}
+
+function drawPourStream(){
+  if(!pouring) return;
+  const t = pourProgress;
+  if(t < 0.06 || t > 0.97) return;
+  const x0 = JAR.spoutX-6, y0 = JAR.spoutY+10;
+  const x1 = GLASS.x1 + (GLASS.x2-GLASS.x1)*0.5, y1 = GLASS.y1 + 6 - (gy2fillOffset());
+  const now = performance.now()/140;
+  ctx.save();
+
+  // wide translucent underlayer for a "watery" volume feel
+  ctx.strokeStyle = shade(pourColor, -10);
+  ctx.globalAlpha = 0.35;
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 12 + Math.sin(now*1.7)*1.5;
+  drawWavyStream(x0,y0,x1,y1,now,3);
+
+  // core stream
+  ctx.strokeStyle = pourColor;
+  ctx.globalAlpha = 0.92;
+  ctx.lineWidth = 6 + Math.sin(now*2.3)*1.2;
+  drawWavyStream(x0,y0,x1,y1,now,5);
+
+  // glossy highlight thread
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+  ctx.globalAlpha = 0.55;
+  ctx.lineWidth = 1.6;
+  drawWavyStream(x0,y0,x1,y1,now,1.6);
+
+  ctx.restore();
+}
+
+function drawWavyStream(x0,y0,x1,y1,now,amp){
+  ctx.beginPath();
+  const steps = 14;
+  for(let i=0;i<=steps;i++){
+    const f = i/steps;
+    const bx = (1-f)*(1-f)*x0 + 2*(1-f)*f*((x0+x1)/2) + f*f*x1;
+    const by = (1-f)*(1-f)*y0 + 2*(1-f)*f*((y0+y1)/2 - 40) + f*f*y1;
+    const wob = Math.sin(now*3 + f*9) * amp * f * 0.8;
+    if(i===0) ctx.moveTo(bx+wob, by);
+    else ctx.lineTo(bx+wob, by);
+  }
+  ctx.stroke();
+}
+
+function gy2fillOffset(){
+  return (GLASS.y2-GLASS.y1) * glassFill;
+}
+
+function drawGlass(){
+  const gx1=GLASS.x1, gx2=GLASS.x2, gy1=GLASS.y1, gy2=GLASS.y2;
+  ctx.save();
+  ctx.save();
+  roundRect(gx1+4, gy1+4, gx2-gx1-8, gy2-gy1-4, 8);
+  ctx.clip();
+  if(glassFill > 0 && glassColor){
+    const fillH = (gy2-gy1)*glassFill;
+    const top = gy2-fillH;
+    const now = performance.now()/450;
+
+    const grad = ctx.createLinearGradient(gx1, top, gx1, gy2);
+    grad.addColorStop(0, shade(glassColor,30));
+    grad.addColorStop(0.5, glassColor);
+    grad.addColorStop(1, shade(glassColor,-20));
+    ctx.fillStyle = grad;
+
+    // wavy liquid surface, not a flat block
+    ctx.beginPath();
+    ctx.moveTo(gx1, gy2+2);
+    ctx.lineTo(gx1, top);
+    for(let x=gx1;x<=gx2;x+=8){
+      const wave = Math.sin(x*0.09 + now) * (pouring ? 3.2 : 1.6);
+      ctx.lineTo(x, top+wave);
+    }
+    ctx.lineTo(gx2, gy2+2);
+    ctx.closePath();
+    ctx.fill();
+
+    // rising bubbles for life
+    if(!bubbleSeeds.length) initBubbles();
+    bubbleSeeds.forEach(b=>{
+      const by = gy2 - ((now*30 + b.phase) % Math.max(10,fillH));
+      if(by < top+4) return;
+      const bx = gx1 + b.xf*(gx2-gx1);
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.beginPath(); ctx.arc(bx, by, b.r, 0, Math.PI*2); ctx.fill();
+    });
+
+    // glossy vertical highlight
+    const glossG = ctx.createLinearGradient(gx1+10,0,gx1+34,0);
+    glossG.addColorStop(0,'rgba(255,255,255,0.4)');
+    glossG.addColorStop(1,'rgba(255,255,255,0)');
+    ctx.fillStyle = glossG;
+    ctx.fillRect(gx1+10, top, 24, fillH);
+
+    // foamy top sheen
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.beginPath();
+    for(let x=gx1;x<=gx2;x+=8){
+      const wave = Math.sin(x*0.09 + now) * (pouring ? 3.2 : 1.6);
+      x===gx1 ? ctx.moveTo(x, top+wave) : ctx.lineTo(x, top+wave);
+    }
+    for(let x=gx2;x>=gx1;x-=8){
+      const wave = Math.sin(x*0.09 + now) * (pouring ? 3.2 : 1.6);
+      ctx.lineTo(x, top+wave+3);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+
+  ctx.strokeStyle = 'rgba(220,235,245,0.6)'; ctx.lineWidth=3;
+  ctx.beginPath();
+  ctx.moveTo(gx1, gy1); ctx.lineTo(gx1+4, gy2-6);
+  ctx.quadraticCurveTo(gx1+4,gy2, gx1+14, gy2);
+  ctx.lineTo(gx2-14, gy2);
+  ctx.quadraticCurveTo(gx2-4,gy2, gx2-4, gy2-6);
+  ctx.lineTo(gx2, gy1);
+  ctx.stroke();
+
+  if(glassState==='full'){
+    // straw
+    ctx.strokeStyle = '#ff5da2'; ctx.lineWidth=5; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(gx1+30, gy1-30); ctx.lineTo(gx1+46, gy1+40); ctx.stroke();
+    // garnish
+    if(glassIngredients.length){
+      const cfg = FRUITS[glassIngredients[0]];
+      ctx.save();
+      ctx.translate(gx2-20, gy1-4);
+      ctx.fillStyle = cfg.skin;
+      ctx.beginPath(); ctx.arc(0,0,12,0.2,Math.PI*2-0.2); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = cfg.flesh;
+      ctx.beginPath(); ctx.arc(0,0,7,0.2,Math.PI*2-0.2); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  ctx.fillStyle = '#5a3a22'; ctx.font='bold 12px Segoe UI, sans-serif'; ctx.textAlign='left';
+  ctx.fillText('glass', gx1, gy1-8);
+  ctx.restore();
+}
+
+function drawButtons(){
+  const inside = piecesInJar().length;
+  const canBlend = inside >= 1 && !blending && jarState==='empty';
+  uiRegions.blend = { x: JAR.x1-10, y: 590, w: 120, h: 34, enabled: canBlend };
+  const canPour = jarState==='liquid' && !pouring;
+  uiRegions.pour = { x: JAR.x1+124, y: 590, w: 100, h: 34, enabled: canPour };
+  const canServe = glassState==='full';
+  uiRegions.serve = { x: GLASS.x1, y: 590, w: 130, h: 34, enabled: canServe };
+  uiRegions.restart = { x: 866, y: 590, w: 114, h: 34, enabled: true };
+  uiRegions.mute = { x: 20, y: 590, w: 50, h: 34, enabled: true };
+
+  drawButton(uiRegions.blend, blending ? 'Blending…' : 'Blend', '#3fcf8e');
+  drawButton(uiRegions.pour, 'Pour', '#4fb8e8');
+  drawButton(uiRegions.serve, 'Serve 🍓', '#ff8fc7');
+  drawButton(uiRegions.restart, '↺ Restart', '#ff6b5e');
+  drawButton(uiRegions.mute, ambientOn ? '🔊' : '🔇', '#e8c86b');
+
+  ctx.fillStyle = '#6b4126'; ctx.font='11px Segoe UI, sans-serif'; ctx.textAlign='center';
+  if(jarState==='empty' && !blending && inside===0){
+    ctx.fillText('drag fruit pieces into the blender', (JAR.x1+JAR.x2)/2, 300-24);
+  }
+}
+function drawButton(btn, label, color){
+  ctx.save();
+  ctx.globalAlpha = btn.enabled ? 1 : 0.55;
+  ctx.fillStyle = color;
+  roundRect(btn.x, btn.y, btn.w, btn.h, 8); ctx.fill();
+  if(!btn.enabled){
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    roundRect(btn.x, btn.y, btn.w, btn.h, 8); ctx.fill();
+  }
+  ctx.fillStyle = '#2a1608'; ctx.font='bold 13px Segoe UI, sans-serif'; ctx.textAlign='center';
+  ctx.fillText(label, btn.x+btn.w/2, btn.y+btn.h/2+5);
+  ctx.restore();
+}
+
+function drawBlob(b){
+  if(blending && blendPieces.find(bp=>bp.blob===b)) return;
+  const cfg = FRUITS[b.fruitKey];
+  const pts = b.particles.map(p=>p.position);
+  const c = blobCentroid(b);
+
+  ctx.save();
+  ctx.beginPath();
+  for(let i=0;i<pts.length;i++){
+    const p0 = pts[i], p1 = pts[(i+1)%pts.length];
+    const mx = (p0.x+p1.x)/2, my=(p0.y+p1.y)/2;
+    if(i===0) ctx.moveTo(mx,my);
+    else ctx.quadraticCurveTo(p0.x,p0.y,mx,my);
+  }
+  ctx.closePath();
+
+  const grad = ctx.createRadialGradient(c.x-b.radius*0.3, c.y-b.radius*0.35, b.radius*0.15, c.x, c.y, b.radius*1.1);
+  const baseColor = b.type==='whole' ? cfg.skin : cfg.flesh;
+  grad.addColorStop(0, shade(baseColor, 55));
+  grad.addColorStop(1, baseColor);
+  ctx.fillStyle = grad;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.lineWidth=1.5; ctx.stroke();
+
+  // texture
+  if(cfg.textured==='seeds'){
+    ctx.fillStyle = cfg.seed;
+    b.deco.forEach(d=>{
+      const x = c.x + Math.cos(d.a)*b.radius*d.r;
+      const y = c.y + Math.sin(d.a)*b.radius*d.r;
+      ctx.beginPath(); ctx.ellipse(x,y,1.6,2.4,d.a,0,Math.PI*2); ctx.fill();
+    });
+  } else if(cfg.textured==='kiwiseeds' && b.type==='piece'){
+    ctx.fillStyle = '#e8e2c8';
+    ctx.beginPath(); ctx.arc(c.x,c.y,b.radius*0.92,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = cfg.flesh;
+    ctx.beginPath(); ctx.arc(c.x,c.y,b.radius*0.78,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = cfg.seed;
+    b.deco.forEach(d=>{
+      const x = c.x + Math.cos(d.a)*b.radius*d.r;
+      const y = c.y + Math.sin(d.a)*b.radius*d.r;
+      ctx.beginPath(); ctx.arc(x,y,1.3,0,Math.PI*2); ctx.fill();
+    });
+  } else if(cfg.textured==='segments' && b.type==='piece'){
+    ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=1;
+    for(let i=0;i<5;i++){
+      const a = (i/5)*Math.PI*2;
+      ctx.beginPath(); ctx.moveTo(c.x,c.y); ctx.lineTo(c.x+Math.cos(a)*b.radius*0.85, c.y+Math.sin(a)*b.radius*0.85); ctx.stroke();
+    }
+  } else if(cfg.textured==='starcrown' && b.type==='piece'){
+    ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=1;
+    for(let i=0;i<5;i++){
+      const a=(i/5)*Math.PI*2;
+      ctx.beginPath(); ctx.moveTo(c.x+Math.cos(a)*b.radius*0.5, c.y+Math.sin(a)*b.radius*0.5);
+      ctx.lineTo(c.x+Math.cos(a)*b.radius*0.75, c.y+Math.sin(a)*b.radius*0.75); ctx.stroke();
+    }
+  }
+
+  // highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.beginPath(); ctx.ellipse(c.x-b.radius*0.32, c.y-b.radius*0.38, b.radius*0.22, b.radius*0.14, -0.5, 0, Math.PI*2); ctx.fill();
+
+  ctx.restore();
+}
+
+function drawSplashes(){
+  splashes.forEach(s=>{
+    ctx.save();
+    ctx.globalAlpha = Math.max(0,s.life);
+    ctx.fillStyle = s.color;
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  });
+}
+
+function drawFlavorText(){
+  if(glassState==='full'){
+    ctx.fillStyle = '#eaf3f8'; ctx.font='bold 15px Segoe UI, sans-serif'; ctx.textAlign='center';
+    ctx.fillText(flavorName(glassIngredients), (GLASS.x1+GLASS.x2)/2, GLASS.y1-24);
+  }
+}
+
+// ---------- Ice cream customer ----------
+function drawCustomer(dt){
+  customer.bounce = Math.max(0, customer.bounce - dt/900);
+  const squish = Math.sin(customer.bounce*Math.PI) * 0.22;
+  const idleBob = Math.sin(performance.now()/480) * 3;
+  const cx = CUSTOMER.x, cy = CUSTOMER.y + idleBob;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(1-squish*0.6, 1+squish);
+  ctx.translate(-cx, -cy);
+
+  // waffle cone
+  ctx.save();
+  const coneTop = cy + 46, coneBottom = cy + 108;
+  ctx.beginPath();
+  ctx.moveTo(cx-40, coneTop);
+  ctx.lineTo(cx+40, coneTop);
+  ctx.lineTo(cx+10, coneBottom);
+  ctx.lineTo(cx-10, coneBottom);
+  ctx.closePath();
+  const coneGrad = ctx.createLinearGradient(cx,coneTop,cx,coneBottom);
+  coneGrad.addColorStop(0,'#e8a94a'); coneGrad.addColorStop(1,'#c07f2e');
+  ctx.fillStyle = coneGrad; ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.2)'; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.save(); ctx.clip();
+  ctx.strokeStyle='rgba(255,255,255,0.35)'; ctx.lineWidth=1.5;
+  for(let i=-3;i<=3;i++){ ctx.beginPath(); ctx.moveTo(cx-50+i*16, coneTop-4); ctx.lineTo(cx-20+i*16, coneBottom+4); ctx.stroke(); }
+  for(let i=-3;i<=3;i++){ ctx.beginPath(); ctx.moveTo(cx-60+i*16, coneBottom+4); ctx.lineTo(cx-30+i*16, coneTop-4); ctx.stroke(); }
+  ctx.restore();
+  ctx.restore();
+
+  // soft-serve swirl body (three graduated lobes)
+  const bodyColor = '#fff6e2';
+  [ {r:44, oy:14}, {r:37, oy:-16}, {r:28, oy:-42} ].forEach(lobe=>{
+    const grad = ctx.createRadialGradient(cx-lobe.r*0.3, cy+lobe.oy-lobe.r*0.3, lobe.r*0.2, cx, cy+lobe.oy, lobe.r*1.1);
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(1, bodyColor);
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(cx, cy+lobe.oy, lobe.r, 0, Math.PI*2); ctx.fill();
+  });
+  ctx.strokeStyle = 'rgba(200,160,100,0.35)'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.arc(cx, cy+14, 44, 0.15*Math.PI, 0.85*Math.PI); ctx.stroke();
+
+  // chocolate drizzle
+  ctx.strokeStyle = '#6b3a1f'; ctx.lineWidth = 3; ctx.lineCap='round';
+  const drizzle = [ [-30,-40, -18,-20, -26,0], [-6,-48, 6,-26, -2,-2], [22,-38, 30,-16, 20,4], [0,-58, -8,-46, 4,-38] ];
+  drizzle.forEach(([x1,y1,x2,y2,x3,y3])=>{
+    ctx.beginPath();
+    ctx.moveTo(cx+x1, cy+y1);
+    ctx.quadraticCurveTo(cx+x2, cy+y2, cx+x3, cy+y3);
+    ctx.stroke();
+  });
+
+  // strawberry on top
+  ctx.save();
+  ctx.translate(cx+4, cy-58);
+  ctx.fillStyle = '#e0273f';
+  ctx.beginPath();
+  ctx.moveTo(0,-10); ctx.bezierCurveTo(10,-10, 12,4, 0,14); ctx.bezierCurveTo(-12,4, -10,-10, 0,-10);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,220,150,0.7)';
+  for(let i=0;i<5;i++){ const a=i/5*Math.PI*2; ctx.beginPath(); ctx.ellipse(Math.cos(a)*5, 2+Math.sin(a)*6, 1,1.6, a, 0, Math.PI*2); ctx.fill(); }
+  ctx.fillStyle = '#3f9142';
+  ctx.beginPath(); ctx.moveTo(-6,-9); ctx.lineTo(0,-16); ctx.lineTo(6,-9); ctx.lineTo(0,-11); ctx.closePath(); ctx.fill();
+  ctx.restore();
+
+  // face
+  const faceY = cy + 8;
+  const mood = customer.mood;
+  ctx.fillStyle = '#3a281c';
+  if(mood === 'superhappy'){
+    ctx.lineWidth = 2.4; ctx.strokeStyle = '#3a281c'; ctx.lineCap='round';
+    [-13, 13].forEach(dx=>{ ctx.beginPath(); ctx.moveTo(cx+dx-5, faceY+3); ctx.quadraticCurveTo(cx+dx, faceY-5, cx+dx+5, faceY+3); ctx.stroke(); });
+  } else {
+    [-13, 13].forEach(dx=>{ ctx.beginPath(); ctx.arc(cx+dx, faceY, 3.4, 0, Math.PI*2); ctx.fill(); });
+  }
+  ctx.fillStyle = 'rgba(255,140,150,0.45)';
+  [-24, 24].forEach(dx=>{ ctx.beginPath(); ctx.ellipse(cx+dx, faceY+9, 6, 4, 0, 0, Math.PI*2); ctx.fill(); });
+  ctx.strokeStyle = '#3a281c'; ctx.lineWidth = 2.2; ctx.lineCap='round';
+  ctx.beginPath();
+  const smileW = mood==='idle' ? 8 : 12, smileD = mood==='idle' ? 4 : 8;
+  ctx.moveTo(cx-smileW, faceY+10);
+  ctx.quadraticCurveTo(cx, faceY+10+smileD, cx+smileW, faceY+10);
+  ctx.stroke();
+
+  ctx.restore();
+
+  // sparkle/heart burst for a great match
+  if(mood === 'superhappy' && customer.bounce > 0.1){
+    ctx.save();
+    ctx.globalAlpha = customer.bounce;
+    ctx.fillStyle = '#ffd166';
+    for(let i=0;i<3;i++){
+      const a = performance.now()/300 + i*2.1;
+      const sx = cx + Math.cos(a)*50, sy = cy-40 + Math.sin(a)*20 - (1-customer.bounce)*20;
+      ctx.save(); ctx.translate(sx,sy); ctx.rotate(a);
+      ctx.beginPath();
+      for(let k=0;k<4;k++){ ctx.lineTo(6,0); ctx.rotate(Math.PI/2); ctx.lineTo(2,0); ctx.rotate(Math.PI/2); }
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  // speech bubble with the order
+  const bubbleY = cy - 96, bubbleW = 34 + customer.order.length*38, bubbleX = cx - bubbleW/2;
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,255,255,0.92)';
+  roundRect(bubbleX, bubbleY, bubbleW, 40, 12); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.12)'; ctx.lineWidth=1.5;
+  roundRect(bubbleX, bubbleY, bubbleW, 40, 12); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx-8, bubbleY+40); ctx.lineTo(cx+8, bubbleY+40); ctx.lineTo(cx, bubbleY+52);
+  ctx.closePath(); ctx.fillStyle='rgba(255,255,255,0.92)'; ctx.fill();
+
+  customer.order.forEach((key,i)=>{
+    const cfg = FRUITS[key];
+    const ix = bubbleX + 24 + i*38, iy = bubbleY + 20;
+    ctx.fillStyle = cfg.skin;
+    ctx.beginPath(); ctx.arc(ix, iy, 13, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.15)'; ctx.lineWidth=1; ctx.stroke();
+  });
+  ctx.restore();
+
+  ctx.fillStyle = '#5a3a22'; ctx.font='bold 12px Segoe UI, sans-serif'; ctx.textAlign='center';
+  ctx.fillText('customer', cx, bubbleY-8);
+}
+
+// ---------- Shop modal ----------
+function drawShopModal(){
+  uiRegions.shopBuy = [];
+  ctx.save();
+  ctx.fillStyle = 'rgba(20,20,25,0.55)';
+  ctx.fillRect(0,0,W,H);
+
+  const mx=140, my=90, mw=720, mh=470;
+  ctx.fillStyle = '#fff8ec';
+  roundRect(mx,my,mw,mh,18); ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.15)'; ctx.lineWidth=2;
+  roundRect(mx,my,mw,mh,18); ctx.stroke();
+
+  ctx.fillStyle = '#4a2c17'; ctx.font='bold 22px Segoe UI, sans-serif'; ctx.textAlign='left';
+  ctx.fillText('Fruit Shop', mx+28, my+44);
+  ctx.font='bold 16px Segoe UI, sans-serif'; ctx.textAlign='right';
+  ctx.fillText('🪙 ' + coins, mx+mw-70, my+44);
+
+  uiRegions.shopClose = { x: mx+mw-46, y: my+14, w: 32, h: 32, enabled: true };
+  ctx.fillStyle = '#ff6b5e';
+  roundRect(uiRegions.shopClose.x, uiRegions.shopClose.y, 32, 32, 8); ctx.fill();
+  ctx.fillStyle = '#2a1608'; ctx.font='bold 15px Segoe UI, sans-serif'; ctx.textAlign='center';
+  ctx.fillText('✕', uiRegions.shopClose.x+16, uiRegions.shopClose.y+22);
+
+  // scrollable single-column list — big rows, big buy buttons, swipe to see more
+  const viewX = mx+16, viewY = my+68, viewW = mw-32, viewH = mh-84;
+  const rowH = 100, rowGap = 12;
+  const contentH = FRUIT_KEYS.length * (rowH+rowGap);
+  shopMaxScroll = Math.max(0, contentH - viewH);
+  shopScroll = Math.min(shopMaxScroll, Math.max(0, shopScroll));
+
+  ctx.save();
+  roundRect(viewX, viewY, viewW, viewH, 12);
+  ctx.clip();
+
+  FRUIT_KEYS.forEach((key,i)=>{
+    const cfg = FRUITS[key];
+    const y = viewY + i*(rowH+rowGap) - shopScroll;
+    if(y+rowH < viewY || y > viewY+viewH) return; // off-screen, skip
+
+    ctx.fillStyle = 'rgba(0,0,0,0.045)';
+    roundRect(viewX, y, viewW, rowH, 14); ctx.fill();
+
+    const ix = viewX + 54, iy = y + rowH/2;
+    const grad = ctx.createRadialGradient(ix-10,iy-12,4,ix,iy,34);
+    grad.addColorStop(0, shade(cfg.skin,50)); grad.addColorStop(1, cfg.skin);
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(ix, iy, 32, 0, Math.PI*2); ctx.fill();
+    if(cfg.locked && !unlockedFruits[key]){
+      ctx.fillStyle = 'rgba(20,20,25,0.45)';
+      ctx.beginPath(); ctx.arc(ix, iy, 32, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle='#fff'; ctx.font='bold 20px Segoe UI, sans-serif'; ctx.textAlign='center';
+      ctx.fillText('🔒', ix, iy+7);
+    }
+
+    ctx.fillStyle = '#4a2c17'; ctx.font='bold 16px Segoe UI, sans-serif'; ctx.textAlign='left';
+    ctx.fillText(cfg.label, ix+50, iy-2);
+
+    const btnW = 118, btnH = 44, btnX = viewX+viewW-btnW-16, btnY = iy-btnH/2;
+    if(unlockedFruits[key]){
+      ctx.fillStyle = '#3a8f5a'; ctx.font='bold 13px Segoe UI, sans-serif'; ctx.textAlign='left';
+      ctx.fillText('✓ Owned', ix+50, iy+20);
+    } else {
+      const affordable = coins >= cfg.price;
+      ctx.fillStyle = '#8b6b46'; ctx.font='13px Segoe UI, sans-serif'; ctx.textAlign='left';
+      ctx.fillText(affordable ? 'You can afford this!' : 'Not enough coins yet', ix+50, iy+20);
+
+      const btn = { x: btnX, y: btnY, w: btnW, h: btnH, enabled: affordable, key };
+      uiRegions.shopBuy.push(btn);
+      ctx.save();
+      ctx.globalAlpha = affordable ? 1 : 0.5;
+      ctx.fillStyle = affordable ? '#3fcf8e' : '#c9c9c9';
+      roundRect(btn.x, btn.y, btn.w, btn.h, 10); ctx.fill();
+      ctx.fillStyle = '#1c2e26'; ctx.font='bold 15px Segoe UI, sans-serif'; ctx.textAlign='center';
+      ctx.fillText('🪙 ' + cfg.price, btn.x+btn.w/2, btn.y+btn.h/2+5);
+      ctx.restore();
+    }
+  });
+  ctx.restore(); // end clip
+
+  if(shopMaxScroll > 0){
+    const trackX = viewX+viewW-6, trackY = viewY, trackH = viewH;
+    ctx.fillStyle = 'rgba(0,0,0,0.08)';
+    roundRect(trackX, trackY, 4, trackH, 2); ctx.fill();
+    const thumbH = Math.max(30, trackH * (viewH/contentH));
+    const thumbY = trackY + (trackH-thumbH) * (shopScroll/shopMaxScroll);
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    roundRect(trackX, thumbY, 4, thumbH, 2); ctx.fill();
+
+    ctx.fillStyle = '#8b6b46'; ctx.font='11px Segoe UI, sans-serif'; ctx.textAlign='center';
+    ctx.fillText('swipe to see more ↕', mx+mw/2, my+mh-8);
+  }
+
+  ctx.restore();
+}
+
+// ---------- Main loop ----------
+// ---------- Landing thud sounds ----------
+Events.on(engine, 'collisionStart', (evt)=>{
+  if(!actx) return;
+  const now = performance.now();
+  evt.pairs.forEach(pair=>{
+    const { bodyA, bodyB } = pair;
+    const staticOne = bodyA.isStatic ? bodyA : (bodyB.isStatic ? bodyB : null);
+    const movingOne = staticOne === bodyA ? bodyB : bodyA;
+    if(!staticOne || movingOne.blobId == null) return;
+    const speed = Math.hypot(movingOne.velocity.x, movingOne.velocity.y);
+    if(speed < 3) return;
+    const last = lastThud[movingOne.blobId] || 0;
+    if(now - last < 220) return;
+    lastThud[movingOne.blobId] = now;
+    playThud(Math.min(3, speed/3));
+  });
+});
+
+let lastT = performance.now();
+function loop(now){
+  let dt = now - lastT; lastT = now;
+  dt = Math.min(dt, 33);
+
+  if(!blending){
+    Engine.update(engine, dt);
+  }
+  updateBlend(dt);
+  updatePour(dt);
+  updateSplashes(dt);
+
+  ctx.clearRect(0,0,W,H);
+  drawBackground();
+  drawBoard();
+  drawJar();
+  drawGlass();
+  drawPourStream();
+  blobs.forEach(drawBlob);
+  drawSplashes();
+  drawCustomer(dt);
+  drawShelf();
+  drawButtons();
+  drawFlavorText();
+  if(shopOpen) drawShopModal();
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>

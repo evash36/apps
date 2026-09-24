@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Candy Shop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+<script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+<style>
+  :root{
+    --pink:#ff6fa8; --blue:#5ec8f8; --purple:#b47ee5; --yellow:#ffd93d; --green:#7ee787;
+    --straw:#ff4d6d; --mango:#ffb703; --blueberry:#4361ee; --grape:#9d4edd; --orange:#ff8a3d;
+    --panel:#fffaf3; --ink:#5a3e36;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none;}
+  html,body{height:100%; margin:0;}
+  body{
+    font-family:'Nunito',sans-serif; color:var(--ink);
+    background: linear-gradient(160deg,#ffe3f1 0%, #ffeecb 45%, #d9f3ff 100%);
+    overflow-x:hidden; min-height:100vh; position:relative;
+  }
+  h1,h2,.title-font{font-family:'Baloo 2',cursive;}
+
+  /* floating background particles */
+  .bg-particle{
+    position:fixed; top:-40px; font-size:22px; opacity:.55; pointer-events:none;
+    animation:float-down linear infinite;
+  }
+  @keyframes float-down{
+    0%{transform:translateY(-5vh) rotate(0deg);}
+    100%{transform:translateY(105vh) rotate(360deg);}
+  }
+
+  header{
+    text-align:center; padding:22px 12px 8px;
+  }
+  .sign-wrap{display:inline-block; position:relative;}
+  .sign-post{
+    display:flex; justify-content:space-between; width:calc(100% - 20px); margin:0 auto;
+    position:relative; height:16px;
+  }
+  .sign-post::before, .sign-post::after{
+    content:''; width:6px; height:26px; background:#c99a63; border-radius:2px;
+    box-shadow:1px 0 2px rgba(0,0,0,.2);
+  }
+  .sign-board{
+    background:linear-gradient(160deg,#e8a86b,#c9834a); border:5px solid #a5642f; border-radius:14px;
+    padding:10px 26px; margin-top:-4px; box-shadow:0 8px 0 rgba(0,0,0,.08), 0 12px 20px rgba(0,0,0,.15);
+    transform:rotate(-1.5deg); position:relative;
+  }
+  .sign-board::before, .sign-board::after{
+    content:''; position:absolute; top:-20px; width:4px; height:22px; background:#8a8a8a;
+  }
+  .sign-board::before{left:22px;} .sign-board::after{right:22px;}
+  header h1{
+    font-size:clamp(24px,5.6vw,38px); margin:0; color:#fff8ea;
+    text-shadow:2px 2px 0 rgba(0,0,0,.2);
+  }
+  header p{margin:6px 0 0; font-weight:700; color:#a97a5e; font-size:14px;}
+
+  nav.tabs{
+    display:flex; flex-wrap:wrap; justify-content:center; gap:10px;
+    padding:10px 12px 4px; max-width:760px; margin:0 auto;
+  }
+  nav.tabs button{
+    font-family:'Baloo 2',cursive; font-size:15px; font-weight:700;
+    border:none; border-radius:16px; padding:10px 16px; cursor:pointer;
+    color:#fff; box-shadow:0 4px 0 rgba(0,0,0,.15), 0 6px 10px rgba(0,0,0,.08);
+    display:flex; align-items:center; gap:6px; transition:transform .12s;
+  }
+  nav.tabs button:active{transform:translateY(3px); box-shadow:0 1px 0 rgba(0,0,0,.15);}
+  nav.tabs button.tab-cotton{background:linear-gradient(135deg,#ff9fd0,#ff6fa8);}
+  nav.tabs button.tab-drinks{background:linear-gradient(135deg,#7fd8ff,#4ea9e8);}
+  nav.tabs button.tab-popcorn{background:linear-gradient(135deg,#ffd77a,#ffb837);}
+  nav.tabs button.tab-gum{background:linear-gradient(135deg,#c9a3ff,#a56bf0);}
+  nav.tabs button.tab-jelly{background:linear-gradient(135deg,#7de0c0,#3bb98f);}
+  nav.tabs button.inactive{filter:grayscale(.35) brightness(.92); opacity:.75;}
+
+  main{max-width:760px; margin:0 auto; padding:10px 14px 60px;}
+  .station{display:none; animation:pop-in .25s ease;}
+  .station.active{display:block;}
+  @keyframes pop-in{from{opacity:0; transform:scale(.96);} to{opacity:1; transform:scale(1);}}
+
+  .panel{
+    background:var(--panel); border-radius:26px; padding:20px 16px 26px;
+    box-shadow:0 10px 0 rgba(0,0,0,.06), 0 14px 30px rgba(0,0,0,.08);
+    position:relative; overflow:hidden;
+  }
+  .panel h2{margin:0 0 4px; font-size:22px; text-align:center;}
+  .hint{text-align:center; font-size:13px; font-weight:700; color:#a97a5e; margin:0 0 14px;}
+
+  .stage{
+    position:relative; height:230px; display:flex; align-items:flex-end; justify-content:center;
+    margin-bottom:16px;
+  }
+
+  /* ---- shared button style ---- */
+  .big-btn{
+    font-family:'Baloo 2',cursive; font-weight:800; font-size:17px; color:#fff;
+    border:none; border-radius:20px; padding:14px 22px; cursor:pointer; display:block; margin:0 auto;
+    box-shadow:0 5px 0 rgba(0,0,0,.18), 0 8px 16px rgba(0,0,0,.1);
+    transition:transform .1s;
+  }
+  .big-btn:active{transform:translateY(4px); box-shadow:0 1px 0 rgba(0,0,0,.18);}
+  .big-btn:disabled{filter:grayscale(.6); opacity:.5; cursor:not-allowed;}
+  .big-btn.shake{animation:shake .35s;}
+  @keyframes shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-6px);}75%{transform:translateX(6px);}}
+
+  .jar-row, .fruit-row{display:flex; justify-content:center; gap:12px; flex-wrap:wrap; margin-bottom:16px;}
+  .jar{
+    width:58px; height:64px; border-radius:12px 12px 18px 18px; cursor:pointer; position:relative;
+    border:3px solid rgba(255,255,255,.7); box-shadow:0 4px 8px rgba(0,0,0,.15);
+    display:flex; align-items:flex-end; justify-content:center; transition:transform .15s, box-shadow .15s;
+  }
+  .jar::before{content:''; position:absolute; top:-8px; left:6px; right:6px; height:10px; background:rgba(255,255,255,.55); border-radius:6px;}
+  .jar span{font-size:11px; font-weight:800; color:#fff; margin-bottom:5px; text-shadow:0 1px 2px rgba(0,0,0,.25);}
+  .jar.selected{transform:translateY(-6px) scale(1.06); box-shadow:0 0 0 4px #fff, 0 6px 14px rgba(0,0,0,.25);}
+
+  footer{text-align:center; font-size:12px; color:#b98f7a; padding:10px; font-weight:700;}
+
+  /* ===== Cotton candy ===== */
+  .cc-machine{
+    width:150px; height:110px; border-radius:50% 50% 20px 20px/60% 60% 20px 20px;
+    background:radial-gradient(circle at 50% 30%, #fff 0%, #ffd7ea 55%, #ff9fce 100%);
+    box-shadow:inset 0 -10px 20px rgba(255,111,168,.35), 0 6px 14px rgba(0,0,0,.15);
+    position:relative; cursor:pointer;
+  }
+  .cc-machine.spin{animation:cc-spin 0.5s linear infinite;}
+  @keyframes cc-spin{from{filter:hue-rotate(0deg) brightness(1);} to{filter:hue-rotate(6deg) brightness(1.05);}}
+  .cc-stick{
+    position:absolute; left:50%; bottom:8px; width:8px; height:90px; background:#e3b57a; border-radius:4px;
+    transform:translateX(-50%); box-shadow:1px 0 2px rgba(0,0,0,.2);
+  }
+  #ccCanvas{position:absolute; left:50%; bottom:60px; transform:translateX(-50%); pointer-events:none;}
+  .ready-tag{
+    position:absolute; top:-2px; left:50%; transform:translateX(-50%);
+    background:#ffe066; color:#7a5b00; font-weight:800; font-size:12px; padding:4px 10px; border-radius:12px;
+    box-shadow:0 2px 6px rgba(0,0,0,.15); animation:bob 1s ease-in-out infinite; white-space:nowrap;
+  }
+  @keyframes bob{0%,100%{transform:translateX(-50%) translateY(0);}50%{transform:translateX(-50%) translateY(-6px);}}
+
+  /* ===== Drinks / popsicle ===== */
+  .drink-cup{
+    width:70px; height:90px; border-radius:8px 8px 26px 26px; border:4px solid #d8d8d8; background:#fff;
+    position:relative; overflow:hidden; box-shadow:0 4px 10px rgba(0,0,0,.12);
+  }
+  .drink-fill{position:absolute; left:0; right:0; bottom:0; height:0%; transition:height .4s, background .4s;}
+  .fridge{
+    width:120px; height:150px; background:linear-gradient(160deg,#eaf6ff,#cfeaff); border-radius:14px;
+    border:4px solid #bcdcf2; position:relative; box-shadow:0 6px 14px rgba(0,0,0,.12); overflow:hidden;
+  }
+  .fridge-door{
+    position:absolute; inset:6px; background:linear-gradient(160deg,#fdfefe,#e4f4ff); border-radius:10px;
+    display:flex; align-items:center; justify-content:center; transform-origin:left center; transition:transform .6s ease;
+    border:2px solid #cfe8fa;
+  }
+  .fridge-door.open{transform:rotateY(-100deg);}
+  .fridge-handle{position:absolute; right:8px; top:50%; width:6px; height:26px; background:#9fc7de; border-radius:3px; transform:translateY(-50%);}
+  .frost-overlay{position:absolute; inset:0; background:radial-gradient(circle,#fff,#cdeeff); opacity:0; transition:opacity .3s;}
+  .mold{
+    width:22px; height:60px; border-radius:4px 4px 10px 10px; background:#e9e9e9; position:relative;
+    box-shadow:inset 0 0 0 2px #ccc;
+  }
+  .mold-fill{position:absolute; left:2px; right:2px; bottom:2px; top:2px; border-radius:2px 2px 8px 8px; height:0%; align-self:flex-end;}
+  .pop-stick{position:absolute; left:50%; top:-34px; width:6px; height:36px; background:#e3b57a; transform:translateX(-50%); border-radius:3px; opacity:0;}
+  .popsicle-final{
+    width:46px; height:90px; border-radius:14px 14px 20px 20px; position:relative; box-shadow:0 4px 10px rgba(0,0,0,.15);
+    display:flex; justify-content:center;
+  }
+  .popsicle-final::after{content:''; position:absolute; top:-30px; width:6px; height:34px; background:#e3b57a; border-radius:3px;}
+  .frost-sparkle{position:absolute; inset:0; background:radial-gradient(circle at 30% 20%, rgba(255,255,255,.9), transparent 40%); border-radius:inherit;}
+
+  /* ===== Popcorn ===== */
+  .pc-machine{
+    width:150px; height:120px; position:relative;
+  }
+  .pc-dome{
+    width:130px; height:90px; border-radius:65px 65px 10px 10px; background:radial-gradient(circle at 40% 30%, rgba(255,255,255,.8), rgba(255,255,255,.15));
+    border:3px solid rgba(255,255,255,.7); position:absolute; bottom:26px; left:10px; overflow:hidden;
+    box-shadow:0 4px 10px rgba(0,0,0,.12);
+  }
+  .pc-base{
+    position:absolute; bottom:0; left:0; width:150px; height:34px; border-radius:10px;
+    background:repeating-linear-gradient(90deg,#ff5c5c 0 14px,#fff 14px 28px);
+    box-shadow:0 4px 8px rgba(0,0,0,.15);
+  }
+  #pcCanvas{position:absolute; bottom:26px; left:10px; border-radius:65px 65px 10px 10px;}
+  .pc-bag{
+    width:70px; height:80px; margin:0 auto; border-radius:6px 6px 16px 16px;
+    background:repeating-linear-gradient(90deg,#ff5c5c 0 10px,#fff 10px 20px);
+    position:relative; box-shadow:0 4px 10px rgba(0,0,0,.15); display:flex; align-items:flex-start; justify-content:center;
+  }
+  .pc-bag .puffs{position:relative; top:-14px; font-size:22px; line-height:1;}
+
+  /* ===== Bubble gum ===== */
+  .gum-machine{width:120px; text-align:center; position:relative;}
+  .gum-dome{
+    width:100px; height:90px; border-radius:50%; margin:0 auto; position:relative; overflow:hidden;
+    background:radial-gradient(circle at 35% 25%, rgba(255,255,255,.85), rgba(255,255,255,.05));
+    border:3px solid rgba(255,255,255,.7); box-shadow:0 4px 10px rgba(0,0,0,.15);
+  }
+  .gum-dome .ball{position:absolute; width:16px; height:16px; border-radius:50%; box-shadow:inset -2px -2px 3px rgba(0,0,0,.15);}
+  .gum-base{width:70px; height:60px; margin:0 auto; background:linear-gradient(160deg,#ff8fb8,#ff5c94); border-radius:10px 10px 16px 16px; position:relative; box-shadow:0 4px 10px rgba(0,0,0,.15);}
+  .gum-crank{
+    position:absolute; right:-16px; top:14px; width:26px; height:26px; border-radius:50%; background:#e0e0e0;
+    border:3px solid #bbb; cursor:pointer; box-shadow:0 3px 6px rgba(0,0,0,.2);
+  }
+  .gum-crank::after{content:''; position:absolute; right:-10px; top:10px; width:14px; height:5px; background:#bbb; border-radius:3px;}
+  .gum-chute{width:8px; height:26px; background:#ddd; margin:0 auto;}
+  .gum-tray{width:60px; height:14px; margin:0 auto; background:#f2c9d8; border-radius:0 0 8px 8px;}
+  .gumball-drop{
+    position:absolute; left:50%; top:70px; width:34px; height:34px; border-radius:50%; transform:translateX(-50%);
+    opacity:0; box-shadow:inset -3px -3px 4px rgba(0,0,0,.2), 0 3px 6px rgba(0,0,0,.2);
+  }
+  .bubble{position:absolute; left:50%; bottom:40px; border-radius:50%; transform:translateX(-50%); opacity:0;}
+
+  .crumb{position:absolute; border-radius:50%; pointer-events:none;}
+  .sparkle-pop{position:absolute; pointer-events:none; font-size:20px;}
+
+  /* ===== Jelly ===== */
+  .jelly-pot{
+    width:110px; height:80px; border-radius:0 0 20px 20px; background:linear-gradient(160deg,#d8d8d8,#a8a8a8);
+    position:relative; box-shadow:0 4px 10px rgba(0,0,0,.15);
+  }
+  .jelly-pot::before{content:''; position:absolute; top:-8px; left:-6px; right:-6px; height:14px; background:#c2c2c2; border-radius:8px;}
+  .jelly-pot-liquid{position:absolute; left:6px; right:6px; bottom:6px; top:20%; border-radius:0 0 14px 14px; transition:background .6s, top .6s; opacity:.9;}
+  .steam{position:absolute; top:-22px; font-size:18px; opacity:0; pointer-events:none;}
+  .steam.rising{animation:steam-up 1.4s ease-out infinite;}
+  @keyframes steam-up{0%{opacity:0; transform:translateY(0) scale(.8);}30%{opacity:.7;}100%{opacity:0; transform:translateY(-26px) scale(1.3);}}
+  .jelly-mold{
+    width:56px; height:46px; border-radius:6px 6px 16px 16px; background:#eee; position:relative;
+    box-shadow:inset 0 0 0 2px #ccc, 0 4px 8px rgba(0,0,0,.12);
+  }
+  .jelly-mold-fill{position:absolute; left:3px; right:3px; bottom:3px; top:3px; border-radius:3px 3px 12px 12px; height:0%; align-self:flex-end; transition:height .5s, background .5s;}
+  .cool-rack{position:relative; width:90px; height:70px; display:flex; align-items:flex-end; justify-content:center;}
+  .cool-rack .lines{position:absolute; bottom:6px; left:6px; right:6px; height:4px; background:repeating-linear-gradient(90deg,#c7a97a 0 6px, transparent 6px 12px);}
+  .droplet{position:absolute; font-size:12px; opacity:0; animation:drop-fall 1.6s ease-in infinite;}
+  @keyframes drop-fall{0%{opacity:0; transform:translateY(-6px);}20%{opacity:.8;}100%{opacity:0; transform:translateY(18px);}}
+  .jelly-plate{
+    width:96px; height:26px; border-radius:50%; background:linear-gradient(160deg,#fefefe,#e2e2e2);
+    box-shadow:0 3px 6px rgba(0,0,0,.15); position:relative; margin:0 auto;
+  }
+  .jelly-final{
+    width:52px; height:44px; border-radius:40% 40% 46% 46%/55% 55% 45% 45%; position:absolute; left:50%; bottom:16px;
+    transform:translateX(-50%); box-shadow:0 4px 8px rgba(0,0,0,.18), inset 0 -6px 10px rgba(255,255,255,.25);
+    cursor:pointer; animation:jiggle 1.4s ease-in-out infinite;
+  }
+  @keyframes jiggle{0%,100%{transform:translateX(-50%) scaleX(1) scaleY(1);}25%{transform:translateX(-50%) scaleX(1.06) scaleY(.94);}50%{transform:translateX(-50%) scaleX(.96) scaleY(1.05);}75%{transform:translateX(-50%) scaleX(1.04) scaleY(.96);}}
+</style>
+</head>
+<body>
+
+<div id="bgParticles"></div>
+
+<header>
+  <div class="sign-wrap">
+    <div class="sign-post"></div>
+    <div class="sign-board"><h1>🍬 Candy Shop 🍬</h1></div>
+  </div>
+  <p>Make treats and gobble them up!</p>
+</header>
+
+<nav class="tabs">
+  <button class="tab-cotton" data-target="cotton" onclick="showStation('cotton')"><iconify-icon icon="fluent-emoji:candy"></iconify-icon> Cotton Candy</button>
+  <button class="tab-drinks" data-target="drinks" onclick="showStation('drinks')"><iconify-icon icon="fluent-emoji:cup-with-straw"></iconify-icon> Drinks &amp; Popsicles</button>
+  <button class="tab-popcorn" data-target="popcorn" onclick="showStation('popcorn')"><iconify-icon icon="fluent-emoji:popcorn"></iconify-icon> Popcorn</button>
+  <button class="tab-gum" data-target="gum" onclick="showStation('gum')"><iconify-icon icon="fluent-emoji:lollipop"></iconify-icon> Bubble Gum</button>
+  <button class="tab-jelly" data-target="jelly" onclick="showStation('jelly')"><iconify-icon icon="fluent-emoji:custard"></iconify-icon> Jelly</button>
+</nav>
+
+<main>
+
+  <!-- ================= COTTON CANDY ================= -->
+  <section class="station active" id="station-cotton">
+    <div class="panel">
+      <h2>🍭 Cotton Candy Machine</h2>
+      <p class="hint">Pick some sugar colors, then press Spin!</p>
+      <div class="stage">
+        <div class="cc-machine" id="ccMachine">
+          <div class="cc-stick"></div>
+          <canvas id="ccCanvas" width="180" height="180"></canvas>
+          <div class="ready-tag" id="ccReadyTag" style="display:none;">✨ Tap to eat! ✨</div>
+        </div>
+      </div>
+      <div class="jar-row">
+        <div class="jar" data-color="pink" style="background:linear-gradient(160deg,#ff9fd0,#ff5b9d)" onclick="toggleSugar('pink','#ff6fa8')"><span>Pink</span></div>
+        <div class="jar" data-color="blue" style="background:linear-gradient(160deg,#8fdcff,#3fb4f0)" onclick="toggleSugar('blue','#5ec8f8')"><span>Blue</span></div>
+        <div class="jar" data-color="purple" style="background:linear-gradient(160deg,#cfa3ff,#a86bef)" onclick="toggleSugar('purple','#b47ee5')"><span>Purple</span></div>
+        <div class="jar" data-color="yellow" style="background:linear-gradient(160deg,#ffe680,#ffcf2e)" onclick="toggleSugar('yellow','#ffd93d')"><span>Yellow</span></div>
+        <div class="jar" data-color="green" style="background:linear-gradient(160deg,#a8f5b6,#5fdb79)" onclick="toggleSugar('green','#7ee787')"><span>Green</span></div>
+      </div>
+      <button class="big-btn" id="ccSpinBtn" style="background:linear-gradient(135deg,#ff9fd0,#ff6fa8)" onclick="ccSpin()">🌀 Spin!</button>
+      <button class="big-btn" id="ccEatBtn" style="background:linear-gradient(135deg,#ffe066,#ffb837); display:none; margin-top:10px;" onclick="eatCottonCandy()">😋 Eat it!</button>
+    </div>
+  </section>
+
+  <!-- ================= DRINKS / POPSICLES ================= -->
+  <section class="station" id="station-drinks">
+    <div class="panel">
+      <h2>🥤 Drinks &amp; Popsicles</h2>
+      <p class="hint" id="drinksHint">Add fruit to the cup, then blend!</p>
+      <div class="stage" id="drinksStage" style="justify-content:space-evenly; align-items:center;">
+        <div class="drink-cup" id="drinkCup"><div class="drink-fill" id="drinkFill"></div></div>
+        <div id="fridgeWrap" style="display:none; position:relative;">
+          <div class="fridge">
+            <div class="frost-overlay" id="frostOverlay"></div>
+            <div class="fridge-door" id="fridgeDoor">
+              <div style="position:relative;">
+                <div class="mold" id="mold"><div class="mold-fill" id="moldFill"></div><div class="pop-stick" id="popStickInMold"></div></div>
+              </div>
+              <div class="fridge-handle"></div>
+            </div>
+          </div>
+        </div>
+        <div id="popsicleWrap" style="display:none;"></div>
+      </div>
+      <div class="fruit-row" id="fruitRow">
+        <div class="jar" style="background:linear-gradient(160deg,#ff8aa0,#ff4d6d)" onclick="addFruit('#ff4d6d')"><span>🍓</span></div>
+        <div class="jar" style="background:linear-gradient(160deg,#ffd27a,#ffb703)" onclick="addFruit('#ffb703')"><span>🥭</span></div>
+        <div class="jar" style="background:linear-gradient(160deg,#7f9bff,#4361ee)" onclick="addFruit('#4361ee')"><span>🫐</span></div>
+        <div class="jar" style="background:linear-gradient(160deg,#c895f7,#9d4edd)" onclick="addFruit('#9d4edd')"><span>🍇</span></div>
+        <div class="jar" style="background:linear-gradient(160deg,#ffb073,#ff8a3d)" onclick="addFruit('#ff8a3d')"><span>🍊</span></div>
+      </div>
+      <button class="big-btn" id="drinkActionBtn" style="background:linear-gradient(135deg,#7fd8ff,#4ea9e8)" onclick="drinkAction()">🥄 Blend!</button>
+      <button class="big-btn" id="drinkEatBtn" style="background:linear-gradient(135deg,#ffe066,#ffb837); display:none; margin-top:10px;" onclick="eatPopsicle()">😋 Eat it!</button>
+    </div>
+  </section>
+
+  <!-- ================= POPCORN ================= -->
+  <section class="station" id="station-popcorn">
+    <div class="panel">
+      <h2>🍿 Popcorn Machine</h2>
+      <p class="hint" id="pcHint">Scoop in some kernels, then press Pop!</p>
+      <div class="stage">
+        <div class="pc-machine" id="pcMachine">
+          <div class="pc-dome" id="pcDome"></div>
+          <canvas id="pcCanvas" width="130" height="90"></canvas>
+          <div class="pc-base"></div>
+        </div>
+        <div id="pcBagWrap" style="display:none; margin-left:14px;">
+          <div class="pc-bag" id="pcBag"><div class="puffs" id="pcPuffs">🍿🍿🍿</div></div>
+        </div>
+      </div>
+      <div class="jar-row">
+        <div class="jar" style="background:linear-gradient(160deg,#ffe9b3,#ffcf6b); width:74px;" onclick="scoopKernels()"><span>🌽 Kernels</span></div>
+      </div>
+      <button class="big-btn" id="pcPopBtn" style="background:linear-gradient(135deg,#ffd77a,#ffb837)" onclick="popCorn()">🔥 Pop!</button>
+      <button class="big-btn" id="pcEatBtn" style="background:linear-gradient(135deg,#ffe066,#ffb837); display:none; margin-top:10px;" onclick="eatPopcorn()">😋 Munch it!</button>
+    </div>
+  </section>
+
+  <!-- ================= BUBBLE GUM ================= -->
+  <section class="station" id="station-gum">
+    <div class="panel">
+      <h2>🍬 Bubble Gum Machine</h2>
+      <p class="hint">Turn the crank to get a gumball!</p>
+      <div class="stage" style="align-items:center;">
+        <div class="gum-machine">
+          <div class="gum-dome" id="gumDome"></div>
+          <div class="gum-chute"></div>
+          <div class="gum-tray" id="gumTray"></div>
+          <div class="gum-base">
+            <div class="gum-crank" id="gumCrank" onclick="turnCrank()"></div>
+          </div>
+          <div class="gumball-drop" id="gumballDrop"></div>
+        </div>
+      </div>
+      <button class="big-btn" id="gumEatBtn" style="background:linear-gradient(135deg,#ffe066,#ffb837); display:none;" onclick="chewGum()">😋 Chew it!</button>
+    </div>
+  </section>
+
+  <!-- ================= JELLY ================= -->
+  <section class="station" id="station-jelly">
+    <div class="panel">
+      <h2>🍮 Jelly Maker</h2>
+      <p class="hint" id="jellyHint">Pick a flavor, then melt it in the boiling water!</p>
+      <div class="stage" id="jellyStage" style="justify-content:space-evenly; align-items:flex-end;">
+        <div class="jelly-pot" id="jellyPot">
+          <div class="steam" id="steam1" style="left:20px;">💨</div>
+          <div class="steam" id="steam2" style="left:55px;">💨</div>
+          <div class="jelly-pot-liquid" id="jellyPotLiquid"></div>
+        </div>
+        <div id="jellyMoldWrap" style="display:none;">
+          <div class="jelly-mold" id="jellyMold"><div class="jelly-mold-fill" id="jellyMoldFill"></div></div>
+        </div>
+        <div id="coolRackWrap" style="display:none;">
+          <div class="cool-rack">
+            <div class="droplet" style="left:20px; animation-delay:0s;">💧</div>
+            <div class="droplet" style="left:45px; animation-delay:.5s;">💧</div>
+            <div class="droplet" style="left:65px; animation-delay:1s;">💧</div>
+            <div class="jelly-mold" id="jellyMoldCooling" style="position:absolute; bottom:10px; left:50%; transform:translateX(-50%);"><div class="jelly-mold-fill" id="jellyMoldCoolingFill" style="height:90%;"></div></div>
+            <div class="lines"></div>
+          </div>
+        </div>
+        <div id="jellyPlateWrap" style="display:none;">
+          <div class="jelly-plate" id="jellyPlate"></div>
+        </div>
+      </div>
+      <div class="jar-row">
+        <div class="jar" style="background:linear-gradient(160deg,#ff8f8f,#ff4d4d)" onclick="pickJelly(this,'#ff4d4d')"><span>Cherry</span></div>
+        <div class="jar" style="background:linear-gradient(160deg,#ffc477,#ffa53d)" onclick="pickJelly(this,'#ffa53d')"><span>Orange</span></div>
+        <div class="jar" style="background:linear-gradient(160deg,#a8f5b6,#5fdb79)" onclick="pickJelly(this,'#5fdb79')"><span>Lime</span></div>
+        <div class="jar" style="background:linear-gradient(160deg,#cfa3ff,#a86bef)" onclick="pickJelly(this,'#a86bef')"><span>Grape</span></div>
+        <div class="jar" style="background:linear-gradient(160deg,#ffe680,#ffcf2e)" onclick="pickJelly(this,'#ffcf2e')"><span>Lemon</span></div>
+      </div>
+      <button class="big-btn" id="jellyActionBtn" style="background:linear-gradient(135deg,#7de0c0,#3bb98f)" onclick="jellyAction()">🔥 Melt it!</button>
+      <button class="big-btn" id="jellyEatBtn" style="background:linear-gradient(135deg,#ffe066,#ffb837); display:none; margin-top:10px;" onclick="eatJelly()">😋 Eat it!</button>
+    </div>
+  </section>
+
+</main>
+
+<footer>Made for Eva &amp; Chloe 💕</footer>
+
+<script>
+/* ===================== shared helpers ===================== */
+let audioCtx;
+function ensureAudio(){ if(!audioCtx){ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); } if(audioCtx.state==='suspended'){audioCtx.resume();} return audioCtx; }
+function tone(freq=440, dur=0.15, type='sine', vol=0.18, delay=0){
+  const ctx = ensureAudio();
+  const t0 = ctx.currentTime + delay;
+  const osc = ctx.createOscillator(); const gain = ctx.createGain();
+  osc.type = type; osc.frequency.setValueAtTime(freq, t0);
+  gain.gain.setValueAtTime(vol, t0);
+  gain.gain.exponentialRampToValueAtTime(0.001, t0+dur);
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.start(t0); osc.stop(t0+dur+0.02);
+}
+function noiseBurst(dur=0.15, vol=0.2, hp=800){
+  const ctx = ensureAudio();
+  const bufferSize = ctx.sampleRate*dur;
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for(let i=0;i<bufferSize;i++){ data[i] = (Math.random()*2-1) * (1 - i/bufferSize); }
+  const src = ctx.createBufferSource(); src.buffer = buffer;
+  const filter = ctx.createBiquadFilter(); filter.type='highpass'; filter.frequency.value = hp;
+  const gain = ctx.createGain(); gain.gain.value = vol;
+  src.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+  src.start();
+}
+function playPop(pitch=1){ noiseBurst(0.08, 0.22, 1200); tone(500*pitch + Math.random()*200, 0.09, 'square', 0.12); }
+function playChime(){ [523,659,784,1047].forEach((f,i)=> tone(f,0.22,'sine',0.16,i*0.09)); }
+function playCrunch(){ for(let i=0;i<3;i++){ setTimeout(()=>noiseBurst(0.06,0.25,2000),i*90);} }
+function playWhoosh(){ noiseBurst(0.6,0.1,300); }
+function playDing(){ tone(1046,0.35,'sine',0.2); tone(1318,0.35,'sine',0.14,0.08); }
+function playClunk(){ tone(150,0.12,'square',0.2); }
+function playStretch(){ tone(300,0.35,'sawtooth',0.06); }
+function playBubblePop(){ noiseBurst(0.1,0.25,600); tone(220,0.15,'sine',0.15); }
+function playSquish(){ tone(180,0.18,'sine',0.12); tone(260,0.14,'sine',0.08,0.06); noiseBurst(0.06,0.1,400); }
+function playBoilBubble(){ tone(120+Math.random()*40,0.12,'sine',0.05); }
+function playPlop(){ tone(160,0.14,'sine',0.16); noiseBurst(0.08,0.15,500); }
+let hum;
+function startHum(){ const ctx=ensureAudio(); hum = ctx.createOscillator(); const g = ctx.createGain(); hum.type='sine'; hum.frequency.value=90; g.gain.value=0.03; hum.connect(g); g.connect(ctx.destination); hum.start(); return {osc:hum, gain:g}; }
+
+function showStation(id){
+  document.querySelectorAll('.station').forEach(s=>s.classList.remove('active'));
+  document.getElementById('station-'+id).classList.add('active');
+  document.querySelectorAll('nav.tabs button').forEach(b=>{
+    b.classList.toggle('inactive', b.dataset.target !== id);
+  });
+}
+
+/* floating background particles */
+const bgEmojis = ['🍬','🍭','🍿','🌈','✨','🍓','🍇'];
+const bgWrap = document.getElementById('bgParticles');
+for(let i=0;i<14;i++){
+  const el = document.createElement('div');
+  el.className='bg-particle';
+  el.textContent = bgEmojis[Math.floor(Math.random()*bgEmojis.length)];
+  el.style.left = (Math.random()*100)+'vw';
+  el.style.animationDuration = (10+Math.random()*10)+'s';
+  el.style.animationDelay = (-Math.random()*15)+'s';
+  el.style.fontSize = (16+Math.random()*14)+'px';
+  bgWrap.appendChild(el);
+}
+
+function spawnCrumbs(x,y,colors,container){
+  for(let i=0;i<10;i++){
+    const c = document.createElement('div');
+    c.className='crumb';
+    const size = 4+Math.random()*6;
+    c.style.width=size+'px'; c.style.height=size+'px';
+    c.style.background = colors[Math.floor(Math.random()*colors.length)];
+    c.style.left = x+'px'; c.style.top = y+'px';
+    c.style.transition = 'transform .6s ease-out, opacity .6s';
+    container.appendChild(c);
+    const ang = Math.random()*Math.PI*2; const dist = 30+Math.random()*40;
+    requestAnimationFrame(()=>{
+      c.style.transform = `translate(${Math.cos(ang)*dist}px, ${Math.sin(ang)*dist+30}px)`;
+      c.style.opacity='0';
+    });
+    setTimeout(()=>c.remove(),650);
+  }
+}
+
+/* ===================== COTTON CANDY ===================== */
+let ccColors = [];
+let ccStage = 'idle'; // idle | spinning | ready
+const ccCanvas = document.getElementById('ccCanvas');
+const ccCtx = ccCanvas.getContext('2d');
+const ccBlobs = [];
+
+function toggleSugar(name, hex){
+  if(ccStage !== 'idle') return;
+  const jar = document.querySelector(`.jar[data-color="${name}"]`);
+  const idx = ccColors.indexOf(hex);
+  if(idx>-1){ ccColors.splice(idx,1); jar.classList.remove('selected'); }
+  else{
+    if(ccColors.length>=3) return;
+    ccColors.push(hex); jar.classList.add('selected');
+    tone(700+Math.random()*200,0.1,'triangle',0.12);
+  }
+}
+
+function ccSpin(){
+  if(ccStage!=='idle') return;
+  if(ccColors.length===0){
+    const btn = document.getElementById('ccSpinBtn');
+    btn.classList.add('shake'); setTimeout(()=>btn.classList.remove('shake'),350);
+    return;
+  }
+  ccStage='spinning';
+  document.getElementById('ccMachine').classList.add('spin');
+  document.getElementById('ccSpinBtn').disabled = true;
+  ccBlobs.length = 0;
+  ccCtx.clearRect(0,0,180,180);
+  const totalDuration = 2400;
+  const start = performance.now();
+  const humOsc = startHum();
+  function frame(now){
+    const elapsed = now-start;
+    const progress = Math.min(1, elapsed/totalDuration);
+    if(Math.random() < 0.55){
+      const ang = Math.random()*Math.PI*2;
+      const rad = (1-progress)*8 + Math.random()*progress*55;
+      const x = 90 + Math.cos(ang)*rad*0.6;
+      const y = 70 + Math.sin(ang)*rad*0.6 - progress*10;
+      ccBlobs.push({x,y, r: 8+Math.random()*14, color: ccColors[Math.floor(Math.random()*ccColors.length)]});
+    }
+    ccCtx.clearRect(0,0,180,180);
+    ccBlobs.forEach(b=>{
+      const grad = ccCtx.createRadialGradient(b.x,b.y,0,b.x,b.y,b.r);
+      grad.addColorStop(0, b.color+'ee');
+      grad.addColorStop(1, b.color+'22');
+      ccCtx.fillStyle = grad;
+      ccCtx.beginPath(); ccCtx.arc(b.x,b.y,b.r,0,Math.PI*2); ccCtx.fill();
+    });
+    if(progress<1){ requestAnimationFrame(frame); }
+    else{
+      document.getElementById('ccMachine').classList.remove('spin');
+      humOsc.osc.stop();
+      ccStage='ready';
+      document.getElementById('ccReadyTag').style.display='block';
+      document.getElementById('ccSpinBtn').style.display='none';
+      document.getElementById('ccEatBtn').style.display='block';
+      playChime();
+    }
+  }
+  requestAnimationFrame(frame);
+  tone(220,0.15,'sawtooth',0.05);
+}
+
+ccCanvas.addEventListener('click', eatCottonCandy);
+document.getElementById('ccMachine').addEventListener('click', eatCottonCandy);
+
+function eatCottonCandy(){
+  if(ccStage!=='ready') return;
+  ccStage='eating';
+  playCrunch();
+  spawnCrumbs(90, 70, ccColors, ccCanvas.parentElement);
+  document.getElementById('ccEatBtn').disabled = true;
+  // shrink blobs progressively
+  let shrink = 0;
+  const shrinkInterval = setInterval(()=>{
+    shrink++;
+    ccBlobs.forEach(b=> b.r *= 0.72);
+    ccCtx.clearRect(0,0,180,180);
+    ccBlobs.forEach(b=>{
+      if(b.r<1) return;
+      const grad = ccCtx.createRadialGradient(b.x,b.y,0,b.x,b.y,b.r);
+      grad.addColorStop(0, b.color+'ee');
+      grad.addColorStop(1, b.color+'22');
+      ccCtx.fillStyle = grad;
+      ccCtx.beginPath(); ccCtx.arc(b.x,b.y,b.r,0,Math.PI*2); ccCtx.fill();
+    });
+    if(shrink>=4){
+      clearInterval(shrinkInterval);
+      ccCtx.clearRect(0,0,180,180);
+      ccBlobs.length = 0;
+      ccColors = [];
+      document.querySelectorAll('#station-cotton .jar').forEach(j=>j.classList.remove('selected'));
+      document.getElementById('ccReadyTag').style.display='none';
+      document.getElementById('ccEatBtn').style.display='none';
+      document.getElementById('ccEatBtn').disabled = false;
+      document.getElementById('ccSpinBtn').style.display='block';
+      document.getElementById('ccSpinBtn').disabled = false;
+      ccStage='idle';
+    }
+  }, 140);
+}
+
+/* ===================== DRINKS / POPSICLE ===================== */
+let drinkStage = 'mixing'; // mixing -> blended -> poured -> stuck -> freezing -> ready
+let mixColors = [];
+const drinkFill = document.getElementById('drinkFill');
+const actionBtn = document.getElementById('drinkActionBtn');
+const drinksHint = document.getElementById('drinksHint');
+
+function blendAvg(colors){
+  let r=0,g=0,b=0;
+  colors.forEach(c=>{
+    const n = parseInt(c.slice(1),16);
+    r += (n>>16)&255; g += (n>>8)&255; b += n&255;
+  });
+  r=Math.round(r/colors.length); g=Math.round(g/colors.length); b=Math.round(b/colors.length);
+  return `rgb(${r},${g},${b})`;
+}
+
+function addFruit(hex){
+  if(drinkStage!=='mixing') return;
+  if(mixColors.length>=3) return;
+  mixColors.push(hex);
+  tone(600+Math.random()*150,0.12,'sine',0.12);
+  updateCupPreview();
+}
+function updateCupPreview(){
+  if(mixColors.length===0){ drinkFill.style.height='0%'; return; }
+  drinkFill.style.height = Math.min(90, 25*mixColors.length)+'%';
+  drinkFill.style.background = `linear-gradient(0deg, ${mixColors.join(',')})`;
+}
+
+function drinkAction(){
+  if(drinkStage==='mixing'){
+    if(mixColors.length===0){
+      actionBtn.classList.add('shake'); setTimeout(()=>actionBtn.classList.remove('shake'),350);
+      return;
+    }
+    drinkStage='blending';
+    actionBtn.disabled = true;
+    const cup = document.getElementById('drinkCup');
+    let shakes=0;
+    const shakeInt = setInterval(()=>{
+      cup.style.transform = shakes%2===0 ? 'rotate(-4deg)' : 'rotate(4deg)';
+      shakes++;
+      if(shakes>10){
+        clearInterval(shakeInt);
+        cup.style.transform='none';
+        drinkFill.style.background = blendAvg(mixColors);
+        drinkFill.style.height='85%';
+        drinkStage='blended';
+        actionBtn.disabled=false;
+        actionBtn.textContent='🧃 Pour into mold';
+        drinksHint.textContent='Pour the juice into the mold!';
+        playChime();
+      }
+    },90);
+    playWhoosh();
+  } else if(drinkStage==='blended'){
+    drinkStage='poured';
+    document.getElementById('fridgeWrap').style.display='block';
+    const finalColor = drinkFill.style.background;
+    const moldFill = document.getElementById('moldFill');
+    moldFill.style.background = finalColor;
+    let h=0;
+    const pourInt = setInterval(()=>{
+      h+=10; moldFill.style.height=h+'%';
+      drinkFill.style.height=(85-h*0.8)+'%';
+      if(h>=90){ clearInterval(pourInt); }
+    },60);
+    tone(500,0.3,'sine',0.08);
+    actionBtn.textContent='🥢 Add the stick';
+    drinksHint.textContent='Pop a stick into the mold!';
+  } else if(drinkStage==='poured'){
+    drinkStage='stuck';
+    const stick = document.getElementById('popStickInMold');
+    stick.style.opacity='1';
+    stick.style.transition='top .4s';
+    stick.style.top='-10px';
+    tone(300,0.1,'square',0.1);
+    actionBtn.textContent='🧊 Put in fridge';
+    drinksHint.textContent='Freeze it in the mini fridge!';
+  } else if(drinkStage==='stuck'){
+    drinkStage='freezing';
+    actionBtn.disabled=true;
+    drinksHint.textContent='Freezing...';
+    const door = document.getElementById('fridgeDoor');
+    const frost = document.getElementById('frostOverlay');
+    door.classList.add('open');
+    playWhoosh();
+    setTimeout(()=>{
+      door.classList.remove('open');
+      const humOsc = startHum();
+      let f=0;
+      const freezeInt = setInterval(()=>{
+        f+=10; frost.style.opacity = (f/100)*0.85;
+        if(f>=100){
+          clearInterval(freezeInt);
+          humOsc.osc.stop();
+          playDing();
+          door.classList.add('open');
+          setTimeout(()=>{
+            frost.style.opacity=0;
+            document.getElementById('fridgeWrap').style.display='none';
+            document.getElementById('drinkCup').style.display='none';
+            document.getElementById('fruitRow').style.display='none';
+            const wrap = document.getElementById('popsicleWrap');
+            wrap.style.display='block';
+            wrap.innerHTML = `<div class="popsicle-final" id="finalPopsicle" style="background:${drinkFillColorSnapshot()}; cursor:pointer;"><div class="frost-sparkle"></div></div>`;
+            drinkStage='ready';
+            actionBtn.style.display='none';
+            document.getElementById('drinkEatBtn').style.display='block';
+            drinksHint.textContent='Tap the popsicle or the button to eat it!';
+            document.getElementById('finalPopsicle').addEventListener('click', eatPopsicle);
+          },500);
+        }
+      },180);
+    },700);
+  }
+}
+function drinkFillColorSnapshot(){
+  return document.getElementById('moldFill').style.background || '#ffb3c6';
+}
+function eatPopsicle(){
+  if(drinkStage!=='ready') return;
+  drinkStage='eating';
+  document.getElementById('drinkEatBtn').disabled = true;
+  playCrunch();
+  const el = document.getElementById('finalPopsicle');
+  spawnCrumbs(el.offsetWidth/2, el.offsetHeight/2, mixColors.length?mixColors:['#ffb3c6'], el);
+  el.style.transition='transform .5s, opacity .5s';
+  el.style.transform='scale(0)';
+  el.style.opacity='0';
+  setTimeout(resetDrinkStation, 500);
+}
+function resetDrinkStation(){
+  drinkStage='mixing';
+  mixColors=[];
+  updateCupPreview();
+  document.getElementById('drinkCup').style.display='flex';
+  document.getElementById('fruitRow').style.display='flex';
+  document.getElementById('popsicleWrap').style.display='none';
+  document.getElementById('popsicleWrap').innerHTML='';
+  document.getElementById('moldFill').style.height='0%';
+  document.getElementById('popStickInMold').style.opacity='0';
+  document.getElementById('popStickInMold').style.top='-34px';
+  actionBtn.style.display='block';
+  actionBtn.disabled=false;
+  actionBtn.textContent='🥄 Blend!';
+  document.getElementById('drinkEatBtn').style.display='none';
+  document.getElementById('drinkEatBtn').disabled=false;
+  drinksHint.textContent='Add fruit to the cup, then blend!';
+}
+
+/* ===================== POPCORN ===================== */
+let pcStage='idle'; // idle -> loaded -> popping -> ready
+let pcKernels = 0;
+const pcCanvas = document.getElementById('pcCanvas');
+const pcCtx = pcCanvas.getContext('2d');
+let pcParticles = [];
+
+function scoopKernels(){
+  if(pcStage!=='idle') return;
+  pcKernels = Math.min(pcKernels+1, 3);
+  tone(400+pcKernels*40,0.08,'triangle',0.12);
+  drawKernelsIdle();
+  document.getElementById('pcHint').textContent = pcKernels>=1 ? 'Ready! Press Pop!' : 'Scoop in some kernels, then press Pop!';
+}
+function drawKernelsIdle(){
+  pcCtx.clearRect(0,0,130,90);
+  pcCtx.fillStyle='#e8c46a';
+  for(let i=0;i<pcKernels*4;i++){
+    pcCtx.beginPath();
+    pcCtx.arc(30+ (i%6)*12 + Math.random()*2, 70 - Math.floor(i/6)*8, 4, 0, Math.PI*2);
+    pcCtx.fill();
+  }
+}
+
+function popCorn(){
+  if(pcStage!=='idle' || pcKernels===0){
+    const btn = document.getElementById('pcPopBtn');
+    btn.classList.add('shake'); setTimeout(()=>btn.classList.remove('shake'),350);
+    return;
+  }
+  pcStage='popping';
+  document.getElementById('pcPopBtn').disabled=true;
+  document.getElementById('pcDome').style.filter='brightness(1.15) saturate(1.3)';
+  pcParticles = [];
+  const duration = 2600 + pcKernels*300;
+  const start = performance.now();
+  let lastPop = 0;
+  function frame(now){
+    const elapsed = now-start;
+    if(elapsed-lastPop > (140 - pcKernels*10) && elapsed < duration-300){
+      lastPop = elapsed;
+      pcParticles.push({
+        x: 30+Math.random()*70, y: 85, vx:(Math.random()-0.5)*1.6, vy:-4-Math.random()*3, r:5+Math.random()*3, settled:false
+      });
+      playPop(0.8+Math.random()*0.6);
+    }
+    pcCtx.clearRect(0,0,130,90);
+    pcParticles.forEach(p=>{
+      if(!p.settled){
+        p.vy += 0.22; p.x += p.vx; p.y += p.vy;
+        if(p.x<8){p.x=8;p.vx*=-0.5;} if(p.x>122){p.x=122;p.vx*=-0.5;}
+        if(p.y>85){ p.y=85; p.vy*=-0.35; p.vx*=0.6; if(Math.abs(p.vy)<0.8){ p.settled=true; } }
+      }
+      pcCtx.fillStyle='#fff8e6';
+      pcCtx.beginPath(); pcCtx.arc(p.x,p.y,p.r,0,Math.PI*2); pcCtx.fill();
+      pcCtx.fillStyle='#f5c542';
+      pcCtx.beginPath(); pcCtx.arc(p.x-p.r*0.3,p.y-p.r*0.3,p.r*0.35,0,Math.PI*2); pcCtx.fill();
+    });
+    if(elapsed<duration){ requestAnimationFrame(frame); }
+    else{
+      document.getElementById('pcDome').style.filter='none';
+      pcCtx.clearRect(0,0,130,90);
+      pcParticles=[];
+      pcStage='ready';
+      document.getElementById('pcBagWrap').style.display='block';
+      document.getElementById('pcMachine').style.opacity='0.4';
+      document.getElementById('pcPopBtn').style.display='none';
+      document.getElementById('pcEatBtn').style.display='block';
+      document.getElementById('pcHint').textContent='Tap the bag or the button to munch it!';
+      playChime();
+    }
+  }
+  requestAnimationFrame(frame);
+}
+document.getElementById('pcBag').addEventListener('click', eatPopcorn);
+document.getElementById('pcBag').style.cursor='pointer';
+
+function eatPopcorn(){
+  if(pcStage!=='ready') return;
+  pcStage='eating';
+  document.getElementById('pcEatBtn').disabled = true;
+  playCrunch();
+  const bag = document.getElementById('pcBag');
+  spawnCrumbs(35,40,['#fff8e6','#f5c542'],bag);
+  bag.style.transition='transform .5s, opacity .5s';
+  bag.style.transform='scale(0.2)';
+  bag.style.opacity='0';
+  setTimeout(()=>{
+    document.getElementById('pcBagWrap').style.display='none';
+    bag.style.transform='none'; bag.style.opacity='1';
+    document.getElementById('pcMachine').style.opacity='1';
+    pcKernels=0; pcStage='idle';
+    document.getElementById('pcEatBtn').style.display='none';
+    document.getElementById('pcEatBtn').disabled=false;
+    document.getElementById('pcPopBtn').style.display='block';
+    document.getElementById('pcPopBtn').disabled=false;
+    document.getElementById('pcHint').textContent='Scoop in some kernels, then press Pop!';
+    pcCtx.clearRect(0,0,130,90);
+  },500);
+}
+
+/* ===================== BUBBLE GUM ===================== */
+let gumStage='idle'; // idle -> ready
+const gumColorsPalette = ['#ff6fa8','#5ec8f8','#ffd93d','#7ee787','#b47ee5','#ff8a3d'];
+let currentGumColor = null;
+
+function fillGumDome(){
+  const dome = document.getElementById('gumDome');
+  dome.innerHTML='';
+  for(let i=0;i<14;i++){
+    const b = document.createElement('div');
+    b.className='ball';
+    b.style.background = gumColorsPalette[Math.floor(Math.random()*gumColorsPalette.length)];
+    b.style.left = (10+Math.random()*70)+'px';
+    b.style.top = (10+Math.random()*60)+'px';
+    dome.appendChild(b);
+  }
+}
+fillGumDome();
+
+function turnCrank(){
+  if(gumStage!=='idle') return;
+  gumStage='dropping';
+  playClunk();
+  const crank = document.getElementById('gumCrank');
+  crank.style.transition='transform .3s';
+  crank.style.transform='rotate(180deg)';
+  currentGumColor = gumColorsPalette[Math.floor(Math.random()*gumColorsPalette.length)];
+  const drop = document.getElementById('gumballDrop');
+  drop.style.background = currentGumColor;
+  drop.style.opacity='1';
+  drop.style.transition='top .5s cubic-bezier(.5,1.8,.6,1)';
+  drop.style.top='70px';
+  setTimeout(()=>{
+    drop.style.top='118px';
+    tone(200,0.08,'square',0.15);
+  }, 350);
+  setTimeout(()=>{
+    crank.style.transform='rotate(0deg)';
+    gumStage='ready';
+    drop.style.cursor='pointer';
+    document.getElementById('gumEatBtn').style.display='block';
+  }, 750);
+}
+document.getElementById('gumballDrop').addEventListener('click', chewGum);
+
+function chewGum(){
+  if(gumStage!=='ready') return;
+  gumStage='chewing';
+  document.getElementById('gumEatBtn').disabled = true;
+  const drop = document.getElementById('gumballDrop');
+  playStretch();
+  drop.style.transition='transform .4s';
+  drop.style.transform='translateX(-50%) scale(0.6)';
+  setTimeout(()=>{
+    drop.style.transition='transform .5s';
+    drop.style.transform='translateX(-50%) scale(2.4)';
+    drop.style.borderRadius='50%';
+  }, 400);
+  setTimeout(()=>{
+    playBubblePop();
+    const rect = drop.getBoundingClientRect();
+    spawnCrumbs(12,12,[currentGumColor,'#ffffff'],drop.parentElement);
+    drop.style.transition='transform .15s, opacity .15s';
+    drop.style.transform='translateX(-50%) scale(0)';
+    drop.style.opacity='0';
+  }, 950);
+  setTimeout(()=>{
+    drop.style.top='70px';
+    drop.style.borderRadius='50%';
+    gumStage='idle';
+    document.getElementById('gumEatBtn').style.display='none';
+    document.getElementById('gumEatBtn').disabled=false;
+  }, 1150);
+}
+
+/* ===================== JELLY ===================== */
+let jellyStage = 'idle'; // idle -> melting -> melted -> poured -> cooling -> set -> ready
+let jellyColor = null;
+const jellyActionBtn = document.getElementById('jellyActionBtn');
+const jellyHint = document.getElementById('jellyHint');
+
+function pickJelly(el, hex){
+  if(jellyStage!=='idle') return;
+  jellyColor = hex;
+  document.querySelectorAll('#station-jelly .jar').forEach(j=>j.classList.remove('selected'));
+  el.classList.add('selected');
+  tone(650+Math.random()*150,0.1,'triangle',0.12);
+}
+
+function jellyAction(){
+  if(jellyStage==='idle'){
+    if(!jellyColor){
+      jellyActionBtn.classList.add('shake'); setTimeout(()=>jellyActionBtn.classList.remove('shake'),350);
+      return;
+    }
+    jellyStage='melting';
+    jellyActionBtn.disabled = true;
+    document.getElementById('steam1').classList.add('rising');
+    document.getElementById('steam2').classList.add('rising');
+    const liquid = document.getElementById('jellyPotLiquid');
+    liquid.style.background = jellyColor+'55';
+    jellyHint.textContent = 'Boiling and melting...';
+    let boilCount = 0;
+    const boilInt = setInterval(()=>{ boilCount++; playBoilBubble(); }, 260);
+    setTimeout(()=>{
+      clearInterval(boilInt);
+      document.getElementById('steam1').classList.remove('rising');
+      document.getElementById('steam2').classList.remove('rising');
+      liquid.style.background = jellyColor+'cc';
+      liquid.style.top = '10%';
+      jellyStage='melted';
+      jellyActionBtn.disabled = false;
+      jellyActionBtn.textContent = '🥣 Pour into mold';
+      jellyHint.textContent = 'All melted! Pour it into the mold.';
+      playChime();
+    }, 2200);
+  } else if(jellyStage==='melted'){
+    jellyStage='poured';
+    document.getElementById('jellyMoldWrap').style.display='block';
+    const moldFill = document.getElementById('jellyMoldFill');
+    moldFill.style.background = jellyColor+'cc';
+    let h=0;
+    const pourInt = setInterval(()=>{
+      h+=12; moldFill.style.height=h+'%';
+      const liquid = document.getElementById('jellyPotLiquid');
+      liquid.style.top = (10+h*0.7)+'%';
+      if(h>=95){ clearInterval(pourInt); }
+    },55);
+    tone(480,0.3,'sine',0.08);
+    jellyActionBtn.textContent = '❄️ Let it cool';
+    jellyHint.textContent = 'Time to let it cool down and set!';
+  } else if(jellyStage==='poured'){
+    jellyStage='cooling';
+    jellyActionBtn.disabled = true;
+    jellyHint.textContent = 'Cooling and setting...';
+    document.getElementById('jellyPot').style.display='none';
+    document.getElementById('jellyMoldWrap').style.display='none';
+    const coolWrap = document.getElementById('coolRackWrap');
+    coolWrap.style.display='block';
+    document.getElementById('jellyMoldCoolingFill').style.background = jellyColor+'cc';
+    setTimeout(()=>{
+      jellyStage='set';
+      jellyActionBtn.disabled = false;
+      jellyActionBtn.textContent = '🍽️ Pop out of mold!';
+      jellyHint.textContent = 'All set! Pop it out of the mold.';
+      playChime();
+    }, 2400);
+  } else if(jellyStage==='set'){
+    jellyStage='ready';
+    document.getElementById('coolRackWrap').style.display='none';
+    const plateWrap = document.getElementById('jellyPlateWrap');
+    plateWrap.style.display='block';
+    document.getElementById('jellyPlate').innerHTML = `<div class="jelly-final" id="finalJelly" style="background:${jellyColor}cc"></div>`;
+    document.getElementById('finalJelly').addEventListener('click', eatJelly);
+    playPlop();
+    jellyActionBtn.style.display='none';
+    document.getElementById('jellyEatBtn').style.display='block';
+    jellyHint.textContent = 'Tap the jelly or the button to eat it!';
+  }
+}
+
+function eatJelly(){
+  if(jellyStage!=='ready') return;
+  jellyStage='eating';
+  document.getElementById('jellyEatBtn').disabled = true;
+  playSquish();
+  const el = document.getElementById('finalJelly');
+  spawnCrumbs(el.offsetWidth/2, el.offsetHeight/2, [jellyColor,'#ffffff'], el);
+  el.style.animation='none';
+  el.style.transition='transform .45s, opacity .45s';
+  el.style.transform='translateX(-50%) scale(0)';
+  el.style.opacity='0';
+  setTimeout(resetJellyStation, 450);
+}
+
+function resetJellyStation(){
+  jellyStage='idle';
+  jellyColor=null;
+  document.querySelectorAll('#station-jelly .jar').forEach(j=>j.classList.remove('selected'));
+  document.getElementById('jellyPot').style.display='block';
+  document.getElementById('jellyPotLiquid').style.background='transparent';
+  document.getElementById('jellyPotLiquid').style.top='20%';
+  document.getElementById('jellyMoldWrap').style.display='none';
+  document.getElementById('jellyMoldFill').style.height='0%';
+  document.getElementById('coolRackWrap').style.display='none';
+  document.getElementById('jellyPlateWrap').style.display='none';
+  document.getElementById('jellyPlate').innerHTML='';
+  jellyActionBtn.style.display='block';
+  jellyActionBtn.disabled=false;
+  jellyActionBtn.textContent='🔥 Melt it!';
+  document.getElementById('jellyEatBtn').style.display='none';
+  document.getElementById('jellyEatBtn').disabled=false;
+  jellyHint.textContent='Pick a flavor, then melt it in the boiling water!';
+}
+</script>
+</body>
+</html>

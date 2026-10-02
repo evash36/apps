@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Butter Squishy Shelf</title>
+<style>
+:root{
+  --bg:#fde9ef; --surface:#fff5f8; --border:#f3c6d6; --text:#3a2e1e; --accent:#c94f4f;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --bg:#2b1a21; --surface:#35212a; --border:#5c3542; --text:#f2ecdb; }
+}
+:root[data-theme="dark"]{ --bg:#2b1a21; --surface:#35212a; --border:#5c3542; --text:#f2ecdb; }
+html{scroll-padding-top:env(safe-area-inset-top,0px);}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Georgia,serif;height:100%;overflow-x:hidden;}
+header{display:flex;gap:8px;align-items:center;justify-content:center;padding:14px 10px;flex-wrap:wrap;}
+h1{font-size:18px;margin:0 10px 0 0;}
+button{font-family:inherit;font-size:14px;padding:8px 14px;border-radius:20px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;}
+button.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+main{display:flex;justify-content:center;padding:0 8px 20px;}
+#shelfPanel,#drawPanel{width:100%;max-width:820px;}
+canvas{display:block;margin:0 auto;max-width:100%;border-radius:14px;border:1px solid var(--border);background:var(--surface);touch-action:none;}
+#world{width:800px;height:480px;}
+#drawCanvas{width:260px;height:340px;cursor:crosshair;}
+#drawWrap{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;align-items:flex-start;}
+#palette{display:flex;flex-direction:column;gap:8px;padding-top:4px;}
+.swatch{width:28px;height:28px;border-radius:50%;border:2px solid var(--border);cursor:pointer;padding:0;}
+.swatch.active{border-color:var(--accent);}
+#drawControls{display:flex;flex-direction:column;gap:8px;padding-top:4px;}
+#shelfControls{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;margin:10px 0 2px;}
+#shelfPalette{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;}
+#soldBadge{font-size:13px;opacity:0.8;margin-left:4px;}
+#stickerRow{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:10px;}
+.sticker{padding:6px 12px;border:1px dashed var(--border);border-radius:8px;background:var(--surface);cursor:grab;user-select:none;touch-action:none;font-size:13px;}
+#packagePanel{text-align:center;}
+#pkgThumbs{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:12px;}
+#pkgThumbs button{padding:3px;border-radius:8px;}
+#pkgCanvas{width:220px;height:300px;margin-bottom:12px;}
+#homeOverlay{position:fixed;inset:0;background:rgba(58,46,30,0.35);display:none;align-items:center;justify-content:center;z-index:50;}
+#homeOverlay.visible{display:flex;}
+#homeCard{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px 40px;text-align:center;max-width:90vw;}
+#homeTitle{font-size:20px;}
+#homeCanvas{width:240px;height:310px;max-width:70vw;margin:10px 0;}
+#homeSub{font-size:16px;}
+#homeSub{font-size:13px;opacity:0.75;margin:4px 0 0;}
+@keyframes squishPulse{0%,100%{transform:scaleY(1) scaleX(1);}50%{transform:scaleY(0.85) scaleX(1.1);}}
+.squish-anim{animation:squishPulse 0.55s ease-in-out infinite;}
+p.hint{text-align:center;font-size:13px;opacity:0.7;margin:6px 0 0;}
+</style>
+</head>
+<body>
+<header>
+  <h1>🧈 Butter Squishy Shelf</h1>
+  <button id="btnShelf" class="active">Shelf</button>
+  <button id="btnDraw">Draw your own</button>
+  <button id="btnPackage">Package it</button>
+  <span id="soldBadge">Sold: <strong id="soldCount">0</strong></span>
+</header>
+<main>
+  <section id="shelfPanel">
+    <div id="shelfControls">
+      <div id="shelfPalette"></div>
+      <button id="resetBtn">Reset shapes</button>
+    </div>
+    <canvas id="world" width="800" height="480"></canvas>
+    <p class="hint">Tap a squishy to send it to the customer. Pick a color, then tap a squishy to recolor it.</p>
+  </section>
+  <section id="drawPanel" hidden>
+    <div id="stickerRow">
+      <div class="sticker" data-text="salted" data-font="16px Georgia">salted</div>
+      <div class="sticker" data-text="butter" data-font="bold 30px Georgia">butter</div>
+      <div class="sticker" data-text="net wt (113g)" data-font="13px Georgia">net wt (113g)</div>
+    </div>
+    <div id="drawWrap">
+      <div id="palette"></div>
+      <canvas id="drawCanvas" width="260" height="340"></canvas>
+      <div id="drawControls">
+        <button id="clearBtn">Clear</button>
+        <button id="addBtn">Add to shelf</button>
+      </div>
+    </div>
+    <p class="hint">Letter and color the wrapper however you like, then add it to the shelf.</p>
+  </section>
+  <section id="packagePanel" hidden>
+    <div id="pkgThumbs"></div>
+    <canvas id="pkgCanvas" width="220" height="300"></canvas>
+    <button id="sealBtn">Seal & send to customer</button>
+    <p class="hint">Pick a squishy above, seal it in the clear package, then it heads to the customer.</p>
+  </section>
+</main>
+<div id="homeOverlay">
+  <div id="homeCard">
+    <p id="homeTitle">🏠 the customer went home!</p>
+    <canvas id="homeCanvas" width="240" height="310"></canvas>
+    <p id="homeSub">squish squish squish...</p>
+    <button id="homeCloseBtn">Back to shop</button>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+<script>
+const { Engine, World, Bodies, Body, Constraint, Mouse, MouseConstraint, Runner, Vector } = Matter;
+
+// ---------- default wrapper textures ----------
+function makeLabelTexture(bg, stripe, ink){
+  const c = document.createElement('canvas'); c.width=200; c.height=280;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = bg; ctx.fillRect(0,0,200,280);
+  ctx.fillStyle = stripe;
+  ctx.fillRect(0,58,200,7);
+  ctx.fillRect(0,205,200,7);
+  ctx.fillStyle = ink; ctx.textAlign='center'; ctx.font='16px Georgia';
+  ctx.fillText('salted', 100, 40);
+  ctx.font='bold 34px Georgia';
+  ctx.fillText('butter', 100, 150);
+  ctx.font='13px Georgia';
+  ctx.fillText('net wt (113g)', 100, 240);
+  return c;
+}
+const presets = [
+  makeLabelTexture('#f5efe0','#c94f4f','#3a2e1e'),
+  makeLabelTexture('#f2c14e','#6b4423','#5a3d10'),
+  makeLabelTexture('#fbeaf0','#d4537e','#72243e'),
+  makeLabelTexture('#e1f5ee','#0f6e56','#085041'),
+  makeLabelTexture('#e7ddfb','#6b3fa0','#3d2160')
+];
+
+const colors = ['#3a2e1e','#c94f4f','#f2c14e','#5dcaa5','#4f83c9','#a86bd1','#ffffff','#000000'];
+
+// ---------- physics world ----------
+const engine = Engine.create(); engine.gravity.y = 0;
+const world = engine.world;
+const canvas = document.getElementById('world');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+const ground = Bodies.rectangle(W/2, H+20, W+40, 60, { isStatic:true, render:{visible:false} });
+const wallL = Bodies.rectangle(-20, H/2, 40, H*2, { isStatic:true });
+const wallR = Bodies.rectangle(W+20, H/2, 40, H*2, { isStatic:true });
+World.add(world, [ground, wallL, wallR]);
+
+const squishies = [];
+
+function createSquishy(x, y, texture){
+  const w=110, h=150, cols=3, rows=2;
+  const nodes = [];
+  for(let j=0;j<rows;j++){
+    for(let i=0;i<cols;i++){
+      const px = x - w/2 + i*(w/(cols-1));
+      const py = y - h/2 + j*(h/(rows-1));
+      const n = Bodies.circle(px, py, 11, { friction:0.7, frictionAir:0.08, restitution:0.15 });
+      n.anchor = { x:px, y:py };
+      nodes.push(n);
+    }
+  }
+  const idx = (i,j)=> j*cols+i;
+  const cs = nodes.map(n => Constraint.create({ bodyA:n, pointB:n.anchor, stiffness:0.012, damping:0.3, length:0, render:{visible:false} }));
+  const stiff=0.55, damp=0.15;
+  for(let j=0;j<rows;j++) for(let i=0;i<cols-1;i++)
+    cs.push(Constraint.create({bodyA:nodes[idx(i,j)], bodyB:nodes[idx(i+1,j)], stiffness:stiff, damping:damp, render:{visible:false}}));
+  for(let j=0;j<rows-1;j++) for(let i=0;i<cols;i++)
+    cs.push(Constraint.create({bodyA:nodes[idx(i,j)], bodyB:nodes[idx(i,j+1)], stiffness:stiff, damping:damp, render:{visible:false}}));
+  for(let j=0;j<rows-1;j++) for(let i=0;i<cols-1;i++){
+    cs.push(Constraint.create({bodyA:nodes[idx(i,j)], bodyB:nodes[idx(i+1,j+1)], stiffness:stiff*0.6, damping:damp, render:{visible:false}}));
+    cs.push(Constraint.create({bodyA:nodes[idx(i+1,j)], bodyB:nodes[idx(i,j+1)], stiffness:stiff*0.6, damping:damp, render:{visible:false}}));
+  }
+  World.add(world, [...nodes, ...cs]);
+  const sq = { nodes, cols, rows, texture, origin:{x,y,w,h,cols,rows}, constraints:cs, packed:false };
+  squishies.push(sq);
+  return sq;
+}
+
+function centroid(sq){
+  let sx=0, sy=0;
+  sq.nodes.forEach(n=>{ sx+=n.position.x; sy+=n.position.y; });
+  return { x: sx/sq.nodes.length, y: sy/sq.nodes.length };
+}
+
+let soldCount = 0;
+const zone = { x1: W-150, y1: H-160, x2: W-20, y2: H-20 };
+const homeOverlay = document.getElementById('homeOverlay');
+const homeCanvas = document.getElementById('homeCanvas');
+const homeCtx = homeCanvas.getContext('2d');
+let homeTimer = null;
+function hideHome(){
+  homeOverlay.classList.remove('visible');
+  homeCanvas.classList.remove('squish-anim');
+  clearTimeout(homeTimer);
+}
+function showHome(sq){
+  homeCtx.clearRect(0,0,homeCanvas.width,homeCanvas.height);
+  homeCtx.drawImage(sq.texture, 0, 0, sq.texture.width, sq.texture.height, 0, 0, homeCanvas.width, homeCanvas.height);
+  homeOverlay.classList.add('visible');
+  homeCanvas.classList.add('squish-anim');
+  clearTimeout(homeTimer);
+  homeTimer = setTimeout(hideHome, 2200);
+}
+document.getElementById('homeCloseBtn').addEventListener('click', hideHome);
+function sellSquishy(sq){
+  showHome(sq);
+  World.remove(world, sq.nodes);
+  World.remove(world, sq.constraints);
+  const i = squishies.indexOf(sq);
+  if(i>-1) squishies.splice(i,1);
+  soldCount++;
+  document.getElementById('soldCount').textContent = soldCount;
+}
+
+function resetSquishy(sq){
+  const {x,y,w,h,cols,rows} = sq.origin;
+  let k=0;
+  for(let j=0;j<rows;j++){
+    for(let i=0;i<cols;i++){
+      const px = x - w/2 + i*(w/(cols-1));
+      const py = y - h/2 + j*(h/(rows-1));
+      Body.setPosition(sq.nodes[k], {x:px, y:py});
+      Body.setVelocity(sq.nodes[k], {x:0, y:0});
+      Body.setAngularVelocity(sq.nodes[k], 0);
+      k++;
+    }
+  }
+}
+
+function worldPointFromEvent(e){
+  const r = canvas.getBoundingClientRect();
+  const cx = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+  const cy = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
+  return { x: cx * (canvas.width/r.width), y: cy * (canvas.height/r.height) };
+}
+
+function squishyAt(pt){
+  for(let k=squishies.length-1;k>=0;k--){
+    const pts = perimeter(squishies[k]);
+    let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+    pts.forEach(p=>{ minX=Math.min(minX,p.x); minY=Math.min(minY,p.y); maxX=Math.max(maxX,p.x); maxY=Math.max(maxY,p.y); });
+    if(pt.x>=minX && pt.x<=maxX && pt.y>=minY && pt.y<=maxY) return squishies[k];
+  }
+  return null;
+}
+
+function perimeter(sq){
+  const {nodes, cols, rows} = sq;
+  const pts = [];
+  for(let i=0;i<cols;i++) pts.push(nodes[i].position);
+  for(let j=1;j<rows;j++) pts.push(nodes[j*cols+cols-1].position);
+  for(let i=cols-2;i>=0;i--) pts.push(nodes[(rows-1)*cols+i].position);
+  for(let j=rows-2;j>0;j--) pts.push(nodes[j*cols].position);
+  return pts;
+}
+
+function drawSquishy(sq){
+  const pts = perimeter(sq);
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  pts.forEach(p=>{ minX=Math.min(minX,p.x); minY=Math.min(minY,p.y); maxX=Math.max(maxX,p.x); maxY=Math.max(maxY,p.y); });
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for(let k=1;k<pts.length;k++) ctx.lineTo(pts[k].x, pts[k].y);
+  ctx.closePath();
+  ctx.clip();
+  ctx.drawImage(sq.texture, minX, minY, Math.max(maxX-minX,1), Math.max(maxY-minY,1));
+  ctx.restore();
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for(let k=1;k<pts.length;k++) ctx.lineTo(pts[k].x, pts[k].y);
+  ctx.closePath();
+  ctx.strokeStyle = 'rgba(58,46,30,0.35)'; ctx.lineWidth = 1.5; ctx.stroke();
+  if(sq.packed){
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for(let k=1;k<pts.length;k++) ctx.lineTo(pts[k].x, pts[k].y);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(255,255,255,0.22)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.globalAlpha = 0.5; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(minX+7, minY+6); ctx.lineTo(minX+7, maxY-6); ctx.stroke();
+    ctx.restore();
+  }
+}
+
+const startX = [110, 260, 410, 560, 700];
+presets.forEach((tex,i)=> createSquishy(startX[i % startX.length], 200 - (i%2)*10, tex));
+
+const mouse = Mouse.create(canvas);
+mouse.pixelRatio = canvas.width / canvas.clientWidth || 1;
+const mouseConstraint = MouseConstraint.create(engine, { mouse, constraint:{ stiffness:0.4, render:{visible:false} } });
+World.add(world, mouseConstraint);
+
+let activeColor = null;
+const shelfPaletteEl = document.getElementById('shelfPalette');
+colors.forEach(c=>{
+  const b = document.createElement('button');
+  b.className = 'swatch'; b.style.background = c;
+  b.addEventListener('click', ()=>{
+    if(activeColor === c){
+      activeColor = null; b.classList.remove('active');
+    } else {
+      activeColor = c;
+      shelfPaletteEl.querySelectorAll('.swatch').forEach(s=>s.classList.remove('active'));
+      b.classList.add('active');
+    }
+  });
+  shelfPaletteEl.appendChild(b);
+});
+
+let shelfDown = null;
+function onShelfDown(e){
+  if(!shelfActive) return;
+  shelfDown = { pt: worldPointFromEvent(e), t: Date.now() };
+}
+function onShelfUp(e){
+  if(!shelfActive || !shelfDown) return;
+  const start = shelfDown; shelfDown = null;
+  const end = worldPointFromEvent(e);
+  const dist = Math.hypot(end.x-start.pt.x, end.y-start.pt.y);
+  if(dist > 14 || Date.now()-start.t > 500) return;
+  const sq = squishyAt(end);
+  if(!sq) return;
+  if(activeColor){
+    const t = document.createElement('canvas');
+    t.width = sq.texture.width; t.height = sq.texture.height;
+    const tctx = t.getContext('2d');
+    tctx.fillStyle = activeColor; tctx.fillRect(0,0,t.width,t.height);
+    sq.texture = t;
+    return;
+  }
+  sq.autoSell = true;
+}
+canvas.addEventListener('mousedown', onShelfDown);
+canvas.addEventListener('touchstart', onShelfDown);
+window.addEventListener('mouseup', onShelfUp);
+canvas.addEventListener('touchend', onShelfUp);
+
+document.getElementById('resetBtn').addEventListener('click', ()=> squishies.forEach(resetSquishy));
+
+let shelfActive = true;
+const runner = Runner.create();
+function drawZone(){
+  ctx.save();
+  ctx.setLineDash([6,5]);
+  ctx.strokeStyle = 'rgba(58,46,30,0.5)'; ctx.lineWidth = 2;
+  ctx.strokeRect(zone.x1, zone.y1, zone.x2-zone.x1, zone.y2-zone.y1);
+  ctx.setLineDash([]);
+  ctx.font = '26px Georgia'; ctx.textAlign='center';
+  ctx.fillText('🧑', (zone.x1+zone.x2)/2, zone.y1+34);
+  ctx.font = '11px Georgia'; ctx.fillStyle = 'rgba(58,46,30,0.7)';
+  ctx.fillText('customer', (zone.x1+zone.x2)/2, zone.y1+52);
+  ctx.fillText('drop to sell', (zone.x1+zone.x2)/2, zone.y2-8);
+  ctx.restore();
+}
+function loop(){
+  requestAnimationFrame(loop);
+  if(!shelfActive) return;
+  squishies.forEach(sq=>{
+    if(sq.autoSell){
+      const tx=(zone.x1+zone.x2)/2, ty=(zone.y1+zone.y2)/2;
+      const c = centroid(sq);
+      const dx=tx-c.x, dy=ty-c.y, dist=Math.hypot(dx,dy)||1;
+      const f = 0.0028;
+      sq.nodes.forEach(n=> Body.applyForce(n, n.position, {x:dx/dist*f, y:dy/dist*f}));
+    }
+  });
+  Engine.update(engine, 1000/60);
+  ctx.clearRect(0,0,W,H);
+  drawZone();
+  squishies.forEach(drawSquishy);
+  for(let i=squishies.length-1;i>=0;i--){
+    const c = centroid(squishies[i]);
+    if(c.x>zone.x1 && c.x<zone.x2 && c.y>zone.y1 && c.y<zone.y2) sellSquishy(squishies[i]);
+  }
+}
+loop();
+
+// ---------- draw mode ----------
+const dc = document.getElementById('drawCanvas');
+const dctx = dc.getContext('2d');
+function blankWrapper(){
+  dctx.fillStyle = '#f5efe0'; dctx.fillRect(0,0,dc.width,dc.height);
+}
+blankWrapper();
+
+let currentColor = colors[0];
+const palette = document.getElementById('palette');
+colors.forEach((c,i)=>{
+  const b = document.createElement('button');
+  b.className = 'swatch' + (i===0 ? ' active' : '');
+  b.style.background = c;
+  b.addEventListener('click', ()=>{
+    document.querySelectorAll('#palette .swatch').forEach(s=>s.classList.remove('active'));
+    b.classList.add('active');
+    currentColor = c;
+    dctx.fillStyle = c;
+    dctx.fillRect(0,0,dc.width,dc.height);
+  });
+  palette.appendChild(b);
+});
+
+let drawing = false, lastX=0, lastY=0;
+function posFromEvent(e){
+  const r = dc.getBoundingClientRect();
+  const cx = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+  const cy = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
+  return [cx * (dc.width/r.width), cy * (dc.height/r.height)];
+}
+function start(e){ drawing=true; [lastX,lastY]=posFromEvent(e); e.preventDefault(); }
+function move(e){
+  if(!drawing) return;
+  const [x,y] = posFromEvent(e);
+  dctx.strokeStyle = currentColor; dctx.lineWidth = 7; dctx.lineCap='round'; dctx.lineJoin='round';
+  dctx.beginPath(); dctx.moveTo(lastX,lastY); dctx.lineTo(x,y); dctx.stroke();
+  lastX=x; lastY=y; e.preventDefault();
+}
+function end(){ drawing=false; }
+dc.addEventListener('mousedown', start); dc.addEventListener('mousemove', move); window.addEventListener('mouseup', end);
+dc.addEventListener('touchstart', start); dc.addEventListener('touchmove', move); dc.addEventListener('touchend', end);
+
+document.getElementById('clearBtn').addEventListener('click', blankWrapper);
+document.getElementById('addBtn').addEventListener('click', ()=>{
+  const tex = document.createElement('canvas'); tex.width=dc.width; tex.height=dc.height;
+  tex.getContext('2d').drawImage(dc,0,0);
+  const x = 80 + Math.random()*(W-160);
+  createSquishy(x, 150, tex);
+  blankWrapper();
+  setMode('shelf');
+});
+
+// ---------- mode toggle ----------
+const btnShelf = document.getElementById('btnShelf');
+const btnDraw = document.getElementById('btnDraw');
+const btnPackage = document.getElementById('btnPackage');
+const shelfPanel = document.getElementById('shelfPanel');
+const drawPanel = document.getElementById('drawPanel');
+const packagePanel = document.getElementById('packagePanel');
+function setMode(mode){
+  shelfActive = (mode === 'shelf');
+  shelfPanel.hidden = mode !== 'shelf';
+  drawPanel.hidden = mode !== 'draw';
+  packagePanel.hidden = mode !== 'package';
+  btnShelf.classList.toggle('active', mode === 'shelf');
+  btnDraw.classList.toggle('active', mode === 'draw');
+  btnPackage.classList.toggle('active', mode === 'package');
+  if(mode === 'package') renderThumbs();
+}
+btnShelf.addEventListener('click', ()=>setMode('shelf'));
+btnDraw.addEventListener('click', ()=>setMode('draw'));
+btnPackage.addEventListener('click', ()=>setMode('package'));
+
+// ---------- package station ----------
+const pkgThumbsEl = document.getElementById('pkgThumbs');
+const pkgCanvas = document.getElementById('pkgCanvas');
+const pkgCtx = pkgCanvas.getContext('2d');
+let selectedSquishy = null;
+
+function renderThumbs(){
+  pkgThumbsEl.innerHTML = '';
+  squishies.filter(sq => !sq.packed).forEach(sq=>{
+    const b = document.createElement('button');
+    const tc = document.createElement('canvas'); tc.width=46; tc.height=64;
+    tc.getContext('2d').drawImage(sq.texture, 0, 0, sq.texture.width, sq.texture.height, 0, 0, 46, 64);
+    b.appendChild(tc);
+    b.addEventListener('click', ()=>{ selectedSquishy = sq; drawPackage(); });
+    pkgThumbsEl.appendChild(b);
+  });
+}
+
+function drawPackage(){
+  pkgCtx.clearRect(0,0,pkgCanvas.width,pkgCanvas.height);
+  if(!selectedSquishy){
+    pkgCtx.fillStyle = 'rgba(58,46,30,0.5)'; pkgCtx.font = '13px Georgia'; pkgCtx.textAlign = 'center';
+    pkgCtx.fillText('pick a squishy above', pkgCanvas.width/2, pkgCanvas.height/2);
+    return;
+  }
+  const x=35, y=20, w=150, h=230, r=18;
+  pkgCtx.save();
+  pkgCtx.beginPath();
+  pkgCtx.moveTo(x+r,y);
+  pkgCtx.arcTo(x+w,y,x+w,y+h,r);
+  pkgCtx.arcTo(x+w,y+h,x,y+h,r);
+  pkgCtx.arcTo(x,y+h,x,y,r);
+  pkgCtx.arcTo(x,y,x+w,y,r);
+  pkgCtx.closePath();
+  pkgCtx.save(); pkgCtx.clip();
+  pkgCtx.drawImage(selectedSquishy.texture, x+14, y+14, w-28, h-28);
+  pkgCtx.restore();
+  pkgCtx.fillStyle = 'rgba(255,255,255,0.22)'; pkgCtx.fill();
+  pkgCtx.strokeStyle = 'rgba(255,255,255,0.9)'; pkgCtx.lineWidth = 2; pkgCtx.stroke();
+  pkgCtx.strokeStyle = 'rgba(58,46,30,0.5)'; pkgCtx.lineWidth = 1; pkgCtx.stroke();
+  pkgCtx.globalAlpha = 0.5; pkgCtx.strokeStyle = '#ffffff'; pkgCtx.lineWidth = 5;
+  pkgCtx.beginPath(); pkgCtx.moveTo(x+18,y+10); pkgCtx.lineTo(x+18,y+h-10); pkgCtx.stroke();
+  pkgCtx.globalAlpha = 1;
+  pkgCtx.setLineDash([4,4]); pkgCtx.strokeStyle = 'rgba(58,46,30,0.6)'; pkgCtx.lineWidth = 1.5;
+  pkgCtx.beginPath(); pkgCtx.moveTo(x, y+16); pkgCtx.lineTo(x+w, y+16); pkgCtx.stroke();
+  pkgCtx.setLineDash([]);
+  pkgCtx.restore();
+}
+
+document.getElementById('sealBtn').addEventListener('click', ()=>{
+  if(!selectedSquishy) return;
+  selectedSquishy.packed = true;
+  selectedSquishy.autoSell = true;
+  selectedSquishy = null;
+  drawPackage();
+  renderThumbs();
+  setMode('shelf');
+});
+
+// ---------- sticker drag-and-drop ----------
+let dragSticker = null, dragGhost = null;
+function ghostPos(e){
+  return { x: e.touches ? e.touches[0].clientX : e.clientX, y: e.touches ? e.touches[0].clientY : e.clientY };
+}
+document.querySelectorAll('.sticker').forEach(s=>{
+  s.addEventListener('pointerdown', e=>{
+    dragSticker = s;
+    dragGhost = s.cloneNode(true);
+    dragGhost.style.position = 'fixed'; dragGhost.style.pointerEvents = 'none';
+    dragGhost.style.opacity = '0.85'; dragGhost.style.zIndex = '999';
+    document.body.appendChild(dragGhost);
+    const p = ghostPos(e);
+    dragGhost.style.left = (p.x-30)+'px'; dragGhost.style.top = (p.y-14)+'px';
+    e.preventDefault();
+  });
+});
+window.addEventListener('pointermove', e=>{
+  if(!dragGhost) return;
+  const p = ghostPos(e);
+  dragGhost.style.left = (p.x-30)+'px'; dragGhost.style.top = (p.y-14)+'px';
+});
+window.addEventListener('pointerup', e=>{
+  if(!dragSticker) return;
+  const r = dc.getBoundingClientRect();
+  const p = ghostPos(e);
+  if(p.x>=r.left && p.x<=r.right && p.y>=r.top && p.y<=r.bottom){
+    const cx = (p.x-r.left) * (dc.width/r.width);
+    const cy = (p.y-r.top) * (dc.height/r.height);
+    dctx.fillStyle = '#3a2e1e'; dctx.textAlign = 'center';
+    dctx.font = dragSticker.dataset.font;
+    dctx.fillText(dragSticker.dataset.text, cx, cy);
+  }
+  if(dragGhost) dragGhost.remove();
+  dragSticker = null; dragGhost = null;
+});
+</script>
+</body>
+</html>
